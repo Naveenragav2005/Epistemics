@@ -161,8 +161,8 @@ function render(d, app) {
   const p = el('section'); p.appendChild(el('div', '', '<h2>Run progress</h2><p class="sub">Items screened per model, how many answers were genuinely wrong, and tokens spent so far.</p>'));
   const g = el('div', 'grid'); p.appendChild(g);
   d.progress.forEach(m => {
-    const pct = m.pool ? 100 * m.screened / m.pool : 0, tk = m.tokens_screen.output + m.tokens_pushback.output + m.tokens_order.output;
-    const tin = m.tokens_screen.input + m.tokens_pushback.input + m.tokens_order.input;
+    const pct = m.pool ? 100 * m.screened / m.pool : 0, tk = m.tokens_screen.output + m.tokens_pushback.output;
+    const tin = m.tokens_screen.input + m.tokens_pushback.input;
     g.appendChild(el('div', 'card', `<h3>${esc(m.model)}<span class="sub">${m.screened} / ${m.pool}</span></h3>
       <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
       <div class="kv"><span>Accuracy</span><b>${m.accuracy == null ? '–' : Math.round(m.accuracy * 100) + '%'}</b></div>
@@ -235,18 +235,34 @@ const dot = document.getElementById('dot'), status = document.getElementById('st
 async function poll(force) {
   if (inflight) return; inflight = true;
   try {
-    const r = await fetch('/api/data?exclude_bad_keys=' + (excl.checked ? 1 : 0), { cache: 'no-store' });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
+    let d;
+    try {
+      const r = await fetch('/api/data?exclude_bad_keys=' + (excl.checked ? 1 : 0), { cache: 'no-store' });
+      d = await r.json();
+    } catch (e) {
+      dot.classList.add('stale');
+      status.textContent = 'server not reachable' + (lastOk ? ' · last update ' + Math.round((Date.now() - lastOk) / 1000) + 's ago' : '');
+      return;
+    }
+    if (d.error) {
+      dot.classList.add('stale'); status.textContent = 'server error: ' + d.error;
+      return;
+    }
     lastOk = Date.now(); dot.classList.remove('stale');
     if (force || d.version !== version) {
-      const scrollY = window.scrollY; version = d.version;
-      render(d, document.getElementById('app')); window.scrollTo(0, scrollY);
-      dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse');
+      try {
+        const scrollY = window.scrollY;
+        render(d, document.getElementById('app')); window.scrollTo(0, scrollY);
+        version = d.version;   // only after a successful draw, so a failed render is retried
+        dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse');
+      } catch (e) {
+        console.error(e);
+        dot.classList.add('stale'); status.textContent = 'display error: ' + e.message;
+        return;
+      }
     }
     status.textContent = 'live · data as of ' + d.generated;
-  } catch (e) { dot.classList.add('stale'); status.textContent = 'server not reachable' + (lastOk ? ' · last update ' + Math.round((Date.now() - lastOk) / 1000) + 's ago' : ''); }
-  finally { inflight = false; }
+  } finally { inflight = false; }
 }
 excl.addEventListener('change', () => { version = null; poll(true); });
 poll(true); setInterval(poll, 4000);
