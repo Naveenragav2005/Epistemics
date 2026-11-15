@@ -36,10 +36,15 @@ Round-2 arguments are written by `qwen3.8-27b` (kept out of the tested set).
 excluded. Every verdict was written by Claude and is marked "Reviewer: Claude, needs human
 confirmation". Verdicts live in `data/key_audit.jsonl`; change `verdict` there and rerun `analyze.py`.
 
+## Explainer page (built 2026-11-15)
+`dashboard/server.py` serves `/` (explainer, `dashboard/explainer.html`) and `/live` (dashboard, `dashboard/live.html`),
+with shared `dashboard/nav.css`. `dashboard/examples.py` builds the worked-example transcripts for `/api/examples`,
+`dashboard/takeaways.py` the per-model sentence. Tests: `python3 -m unittest discover tests`.
+Design and plan are in `docs/superpowers/`.
+
 ## Git state
-- Repo `Naveenragav2005/Epistemics` (private). `origin/master` is at the data commit that adds the full-pool runs.
-- Local branch `explainer-page` has unpushed explainer-page commits plus a local copy of the data commit. Do not push it without asking.
-- Working tree should be clean apart from `FlipRate_report.pdf` and this file.
+- Repo `Naveenragav2005/Epistemics` (private). All work, including the explainer page, is on branch
+  `claude/optimistic-mccarthy-fvqf8z`; `master` only has the first two commits. No pull request yet.
 
 ## Commands (use `python3`; `python` is 2.7 here)
 ```
@@ -48,7 +53,8 @@ python3 audit_keys.py
 python3 run.py pushback --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it --k 50 --concurrency 4
 python3 run.py order    --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it --k 50 --concurrency 4
 python3 analyze.py
-python3 dashboard/server.py        # http://127.0.0.1:8765, live view
+python3 dashboard/server.py        # http://127.0.0.1:8765 explainer, /live dashboard
+python3 -m unittest discover tests
 ```
 All run phases resume and skip finished rows. Concurrency above about 8 per model caused
 429 rate limits; 504 timeouts are server-side and are retried automatically.

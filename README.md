@@ -70,13 +70,22 @@ Every call is appended to `runs/*.jsonl` as it finishes. If a run crashes or you
 
 **Offline test:** `python data.py --synthetic --n 120` and then add `--mock` to every `run.py` command. This exercises the whole pipeline with a fake model.
 
-## Live dashboard
+## Explainer and live dashboard
 
 ```bash
 python dashboard/server.py        # then open http://127.0.0.1:8765
 ```
 
-A small local web app (standard library server plus a vendored `d3`, no extra dependencies, works offline) that recomputes every number from `runs/` and `data/` whenever they change and redraws itself every few seconds, so it fills in while `screen`, `pushback` and `order` are running. It shows run progress and token spend per model, the headline table with discrimination intervals, flip curves with the control, the order ablation per rebuttal order, and stated confidence. A toggle excludes items whose key was judged wrong or ambiguous (on by default), and cells with fewer than 30 items are marked. The server only reads files; it never calls the Adaption API.
+A small local web app (standard library server plus a vendored `d3`, no extra dependencies, no build step) with two pages:
+
+- `/` is the **explainer**. It lays out the two conditions and the control, replays a real conversation from `runs/` round by round with the answer and stated confidence on every turn and the control conversation alongside, then covers the rebuttal types, the order ablation, the metrics and the caveats. A model and case picker (gave up a right answer, held a right answer, corrected a wrong answer) offers up to ten conversations per case per model. The one shown first is chosen by rule, not by hand: the first right answer stated at 80% confidence or more that ended on the pushed option. The examples are illustrative; the tables are the evidence.
+- `/live` is the **live dashboard**. It recomputes every number from `runs/` and `data/` whenever they change and redraws itself every few seconds, so it fills in while `screen`, `pushback` and `order` are running. It shows run progress and token spend per model, the headline table with discrimination intervals and a generated one-sentence takeaway per model, flip curves with the control, the order ablation per rebuttal order, and stated confidence, each with a caption saying what it shows. A toggle excludes items whose key was judged wrong or ambiguous (on by default), and cells with fewer than 30 items are marked.
+
+Both pages read two JSON endpoints: `/api/data` (the numbers) and `/api/examples` (the transcripts). Each takes `?exclude_bad_keys=0|1`; excluded items are never offered as examples. The server only reads files; it never calls the Adaption API.
+
+```bash
+python -m unittest discover tests   # example builder, takeaway sentences, server routes
+```
 
 ## Outputs
 
