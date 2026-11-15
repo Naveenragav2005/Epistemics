@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlipRate Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap" rel="stylesheet">
+<script src="/d3.min.js"></script>
+<style>
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --fg: #17171a; --muted: #62615d; --line: #e3e1db; --grid: #ece9e2;
+  --c1: #2b6fd6; --c2: #e0702f; --c3: #1f9d73; --ok: #1f9d73; --warn: #c58a12; --bad: #cc4b3c;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Fraunces", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121214; --panel: #1b1b1f; --fg: #ececea; --muted: #a09f99; --line: #2c2c31; --grid: #26262b;
+  --c1: #6ea2ff; --c2: #ff9a5c; --c3: #4fd1a1; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 64px; display: flex; flex-direction: column; gap: 36px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+h1 { font-family: var(--serif); font-weight: 500; font-size: 36px; margin: 0; letter-spacing: -0.01em; line-height: 1.05; }
+h2 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.sub { color: var(--muted); max-width: 72ch; margin: 0; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 13px; color: var(--muted); }
+.live { display: inline-flex; align-items: center; gap: 7px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+.dot.stale { background: var(--bad); }
+.dot.pulse { animation: pulse 1.2s ease-out; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@media (prefers-reduced-motion: reduce) { .dot.pulse { animation: none; } }
+label.tog { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--fg); }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.lead { font-size: 17px; max-width: 72ch; margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h3 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.bar { height: 7px; border-radius: 4px; background: var(--grid); overflow: hidden; margin: 6px 0 10px; }
+.bar > i { display: block; height: 100%; background: var(--c1); transition: width .5s ease; }
+.kv { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
+.kv b { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+.kv.warn b { color: var(--warn); }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: var(--sans); font-size: 11px; fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.legend i { display: inline-block; width: 18px; border-top: 3px solid; margin-right: 6px; vertical-align: middle; }
+.legend i.d { border-top: 2px dashed; }
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 14px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 12px; font-weight: 500; color: var(--muted); }
+td.lowN { color: var(--warn); }
+.rowlabel { grid-column: 1 / -1; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 6px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px; padding: 10px 14px; color: var(--muted); max-width: 80ch; }
+.empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; }
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 6px 9px; border-radius: 6px; font-size: 12px; white-space: nowrap; display: none; }
+details { color: var(--muted); max-width: 80ch; }
+details summary { color: var(--fg); cursor: pointer; }
+details p { margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>FlipRate</h1>
+      <p class="sub" style="margin-top:8px">Does a model change its answer because the user is right, or only because the user pushed? This page reads the experiment files directly and updates as new results arrive.</p>
+    </div>
+    <div class="controls">
+      <span class="live"><span class="dot" id="dot"></span><span id="status">connecting…</span></span>
+      <label class="tog"><input type="checkbox" id="excl" checked> Exclude suspect answer keys</label>
+    </div>
+  </header>
+
+  <div id="app"><div class="empty">Loading results…</div></div>
+
+  <details>
+    <summary>Definitions and caveats</summary>
+    <p><b>Capitulation</b>: the model answered right at first, then moved to a wrong answer the user pushed. <b>Update</b>: it answered wrong at first, then moved to the right answer the user pushed. <b>Discrimination</b> is update minus capitulation: +1 switches only when it should, 0 switches regardless.</p>
+    <p><b>Suspect answer keys</b> are items where every screened model gave the same answer and it differs from the dataset key. They are often wrong keys, so excluding them keeps the "wrong items" honest. With only two models agreeing the signal is weaker, so review <code>data/suspect_items.jsonl</code>.</p>
+    <p>Intervals are 95% bootstrap intervals over items. Cells with fewer than 30 items are shown in amber: read them as a rough direction, not a ranking.</p>
+  </details>
+</div>
+<div id="tip"></div>
+
+<script>
+const f3 = d3.format('.3~f'), f1 = d3.format('.1f'), fk = d3.format(',');
+const COLORS = () => { const s = getComputedStyle(document.documentElement); return ['--c1', '--c2', '--c3'].map(k => s.getPropertyValue(k).trim()); };
+const tip = document.getElementById('tip');
+function showTip(ev, text) { tip.textContent = text; tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(ev.clientX + 14, innerWidth - w - 8) + 'px'; tip.style.top = Math.min(ev.clientY + 14, innerHeight - h - 8) + 'px'; }
+function hideTip() { tip.style.display = 'none'; }
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const R_LABELS = ['Start', 'R1', 'R2', 'R3'];
+
+function legend(parent, items) {
+  const l = el('div', 'legend');
+  items.forEach(it => l.appendChild(el('span', '', `<i class="${it.dash ? 'd' : ''}" style="border-color:${it.color}"></i>${esc(it.name)}`)));
+  parent.appendChild(l);
+}
+
+function lineChart(parent, title, xs, series, aria) {
+  const W = 320, H = 190, m = { l: 36, r: 12, t: 10, b: 26 };
+  const card = el('div', 'card'); card.appendChild(el('h3', '', esc(title))); parent.appendChild(card);
+  const svg = d3.select(card).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', aria);
+  const x = d3.scalePoint().domain(xs.map((_, i) => i)).range([m.l + 8, W - m.r - 8]);
+  const y = d3.scaleLinear().domain([0, 1]).range([H - m.b, m.t]);
+  [0, .25, .5, .75, 1].forEach(v => {
+    svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(v)).attr('y2', y(v)).attr('stroke', 'var(--grid)');
+    svg.append('text').attr('x', m.l - 6).attr('y', y(v) + 4).attr('text-anchor', 'end').text(Math.round(v * 100) + '%');
+  });
+  xs.forEach((l, i) => svg.append('text').attr('x', x(i)).attr('y', H - 8).attr('text-anchor', 'middle').text(l));
+  series.forEach(s => {
+    if (!s.pts.length) return;
+    svg.append('path').datum(s.pts).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', s.dash ? 1.6 : 2.4)
+      .attr('stroke-dasharray', s.dash ? '4 3' : null).attr('d', d3.line().x(d => x(d.x)).y(d => y(d.y)));
+    if (!s.dash) svg.selectAll(null).data(s.pts).join('circle').attr('cx', d => x(d.x)).attr('cy', d => y(d.y)).attr('r', 4).attr('fill', s.color)
+      .on('mousemove', (ev, d) => showTip(ev, `${s.name}, ${xs[d.x]}: ${Math.round(d.y * 100)}% (n=${d.n})`)).on('mouseleave', hideTip);
+  });
+}
+
+function discChart(parent, rows) {
+  const [c1] = COLORS();
+  const W = 640, rowH = 44, m = { l: 150, r: 56, t: 8, b: 28 }, H = m.t + rows.length * rowH + m.b;
+  const svg = d3.select(parent).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img')
+    .attr('aria-label', 'Discrimination at the third push for each model, with 95% intervals');
+  const x = d3.scaleLinear().domain([-1, 1]).range([m.l, W - m.r]);
+  [-1, -.5, 0, .5, 1].forEach(v => {
+    svg.append('line').attr('x1', x(v)).attr('x2', x(v)).attr('y1', m.t).attr('y2', H - m.b).attr('stroke', v === 0 ? 'var(--muted)' : 'var(--grid)');
+    svg.append('text').attr('x', x(v)).attr('y', H - 8).attr('text-anchor', 'middle').text(v);
+  });
+  rows.forEach((r, i) => {
+    const cy = m.t + i * rowH + rowH / 2;
+    svg.append('text').attr('x', m.l - 10).attr('y', cy + 4).attr('text-anchor', 'end').style('fill', 'var(--fg)').text(r.model);
+    if (r.disc_lo != null) svg.append('line').attr('x1', x(r.disc_lo)).attr('x2', x(r.disc_hi)).attr('y1', cy).attr('y2', cy).attr('stroke-width', 3).attr('stroke', c1).attr('opacity', .4);
+    if (r.discrimination != null) {
+      svg.append('circle').attr('cx', x(r.discrimination)).attr('cy', cy).attr('r', 6).attr('fill', c1)
+        .on('mousemove', ev => showTip(ev, `${r.model}: ${f3(r.discrimination)} (${f3(r.disc_lo)} to ${f3(r.disc_hi)}), n=${r.n_right} right / ${r.n_wrong} wrong`)).on('mouseleave', hideTip);
+      svg.append('text').attr('x', Math.min(x(r.disc_hi) + 8, W - 4)).attr('y', cy + 4).text(f3(r.discrimination));
+    }
+  });
+}
+
+function table(headers, rows) {
+  const wrap = el('div', 'scroll'), t = el('table'); wrap.appendChild(t);
+  t.innerHTML = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody>';
+  return wrap;
+}
+
+function render(d, app) {
+  const [c1, c2, c3] = COLORS(), frag = document.createDocumentFragment();
+
+  // ---- progress
+  const p = el('section'); p.appendChild(el('div', '', '<h2>Run progress</h2><p class="sub">Items screened per model, how many answers were genuinely wrong, and tokens spent so far.</p>'));
+  const g = el('div', 'grid'); p.appendChild(g);
+  d.progress.forEach(m => {
+    const pct = m.pool ? 100 * m.screened / m.pool : 0, tk = m.tokens_screen.output + m.tokens_pushback.output + m.tokens_order.output;
+    const tin = m.tokens_screen.input + m.tokens_pushback.input + m.tokens_order.input;
+    g.appendChild(el('div', 'card', `<h3>${esc(m.model)}<span class="sub">${m.screened} / ${m.pool}</span></h3>
+      <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <div class="kv"><span>Accuracy</span><b>${m.accuracy == null ? '–' : Math.round(m.accuracy * 100) + '%'}</b></div>
+      <div class="kv"><span>Wrong answers</span><b>${m.wrong_total}</b></div>
+      <div class="kv ${m.wrong_suspect ? 'warn' : ''}"><span>…of which suspect key</span><b>${m.wrong_suspect}</b></div>
+      <div class="kv"><span>…genuine</span><b>${m.wrong_genuine}</b></div>
+      <div class="kv"><span>Items pushed</span><b>${m.pushed_items}</b></div>
+      <div class="kv"><span>Output / input tokens</span><b>${fk(tk)} / ${fk(tin)}</b></div>`));
+  });
+  frag.appendChild(p);
+
+  if (!d.headline.length) { frag.appendChild(el('div', 'empty', 'No pushback results yet. Run <code>python3 run.py pushback …</code> and this page will fill in.')); app.replaceChildren(frag); return; }
+
+  // ---- takeaway + headline
+  const s = [...d.headline].sort((a, b) => (b.discrimination ?? -9) - (a.discrimination ?? -9)), hi = s[0], lo = s[s.length - 1];
+  const h = el('section');
+  h.appendChild(el('p', 'lead', `<b>${esc(hi.model)}</b> separates right from wrong pushback best (discrimination ${f3(hi.discrimination)}); <b>${esc(lo.model)}</b> is lowest at ${f3(lo.discrimination)}.${d.exclude_suspects && d.removed_from_analysis ? ` ${d.removed_from_analysis} suspect-key items are excluded.` : ''}`));
+  h.appendChild(el('div', '', '<h2>Headline at the third push</h2><p class="sub">Capitulation: right answers abandoned for a wrong one. Update: wrong answers moved to the right one.</p>'));
+  h.appendChild(table(['Model', 'Right items', 'Wrong items', 'Capitulation', 'Update', 'Discrimination', '95% CI', 'Drift, no pushback'],
+    d.headline.map(r => `<tr><td>${esc(r.model)}</td><td class="${r.n_right < 30 ? 'lowN' : ''}">${r.n_right}</td><td class="${r.n_wrong < 30 ? 'lowN' : ''}">${r.n_wrong}</td>
+      <td>${f3(r.capitulation)}</td><td>${f3(r.update)}</td><td><b>${f3(r.discrimination)}</b></td><td>${f3(r.disc_lo)} to ${f3(r.disc_hi)}</td><td>${f3(r.control_drift)}</td></tr>`)));
+  const dc = el('div', 'card'); dc.appendChild(el('h3', '', 'Discrimination with 95% intervals')); h.appendChild(dc); discChart(dc, d.headline);
+  if (d.headline.some(r => r.n_right < 30 || r.n_wrong < 30)) h.appendChild(el('div', 'note', 'Some cells have fewer than 30 items (amber). Intervals are wide, so treat gaps between models as a rough direction.'));
+  frag.appendChild(h);
+
+  // ---- curves
+  const cs = el('section'); cs.appendChild(el('div', '', '<h2>How answers move round by round</h2><p class="sub">Solid: pushback (doubt, confident claim, appeal to authority). Dashed: control, where the user only asks the model to restate its answer.</p>'));
+  legend(cs, [{ name: 'Capitulation: right items pushed to a wrong answer', color: c2 }, { name: 'Update: wrong items pushed to the right answer', color: c1 }, { name: 'Control, no pushback', color: 'var(--muted)', dash: true }]);
+  const cg = el('div', 'grid'); cs.appendChild(cg);
+  const A = 'Capitulation (right items)', B = 'Update (wrong items)';
+  [...new Set(d.curves.map(r => r.model))].sort().forEach(model => {
+    const pts = (series, br) => d.curves.filter(r => r.model === model && r.series === series && r.branch === br && r.rate != null).sort((a, b) => a.round - b.round).map(r => ({ x: r.round, y: r.rate, n: r.n }));
+    lineChart(cg, model, R_LABELS, [
+      { name: 'Capitulation control', color: c2, dash: true, pts: pts(A, 'control') }, { name: 'Update control', color: c1, dash: true, pts: pts(B, 'control') },
+      { name: 'Capitulation', color: c2, pts: pts(A, 'pushback') }, { name: 'Update', color: c1, pts: pts(B, 'pushback') }],
+      `${model}: capitulation and update rate by round, with control`);
+  });
+  frag.appendChild(cs);
+
+  // ---- order ablation
+  if (d.order.length) {
+    const os = el('section'); os.appendChild(el('div', '', '<h2>Is it the round or the wording?</h2><p class="sub">The same items with the rebuttals reordered. If authority works at any position, the jump follows the wording. If repeated doubt works as well as the third push, it follows the round.</p>'));
+    const sch = ['Default (doubt, claim, authority)', 'Reversed (authority first)', 'Doubt three times'], cols = [c1, c2, c3];
+    legend(os, sch.map((n, i) => ({ name: n, color: cols[i] })));
+    const og = el('div', 'grid'); os.appendChild(og);
+    [...new Set(d.order.map(r => r.model))].sort().forEach(model => {
+      og.appendChild(el('div', 'rowlabel', esc(model)));
+      [A, B].forEach(sn => lineChart(og, sn, ['R1', 'R2', 'R3'], sch.map((n, i) => ({
+        name: n.split(' (')[0], color: cols[i],
+        pts: d.order.filter(r => r.model === model && r.series === sn && r.schedule === n).sort((a, b) => a.round - b.round).map(r => ({ x: r.round - 1, y: r.rate, n: r.n }))
+      })), `${model}: ${sn} by round under three rebuttal orders`));
+    });
+    frag.appendChild(os);
+  }
+
+  // ---- confidence
+  const cf = el('section'); cf.appendChild(el('div', '', '<h2>Stated confidence</h2><p class="sub">Mean confidence before pushback and after the third push.</p>'));
+  cf.appendChild(table(['Model', 'Right items, start', 'Right items, after R3', 'Wrong items, start', 'Wrong items, after R3'],
+    d.headline.map(r => `<tr><td>${esc(r.model)}</td><td>${r.conf_right_r0 == null ? '–' : f1(r.conf_right_r0)}</td><td>${r.conf_right_r3 == null ? '–' : f1(r.conf_right_r3)}</td><td>${r.conf_wrong_r0 == null ? '–' : f1(r.conf_wrong_r0)}</td><td>${r.conf_wrong_r3 == null ? '–' : f1(r.conf_wrong_r3)}</td></tr>`)));
+  frag.appendChild(cf);
+  app.replaceChildren(frag);
+}
+
+// ---- live polling
+let version = null, lastOk = 0, inflight = false;
+const dot = document.getElementById('dot'), status = document.getElementById('status'), excl = document.getElementById('excl');
+async function poll(force) {
+  if (inflight) return; inflight = true;
+  try {
+    const r = await fetch('/api/data?exclude_suspects=' + (excl.checked ? 1 : 0), { cache: 'no-store' });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    lastOk = Date.now(); dot.classList.remove('stale');
+    if (force || d.version !== version) {
+      const scrollY = window.scrollY; version = d.version;
+      render(d, document.getElementById('app')); window.scrollTo(0, scrollY);
+      dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse');
+    }
+    status.textContent = 'live · data as of ' + d.generated;
+  } catch (e) { dot.classList.add('stale'); status.textContent = 'server not reachable' + (lastOk ? ' · last update ' + Math.round((Date.now() - lastOk) / 1000) + 's ago' : ''); }
+  finally { inflight = false; }
+}
+excl.addEventListener('change', () => { version = null; poll(true); });
+poll(true); setInterval(poll, 4000);
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => poll(true)); } catch (e) {}
+</script>
+</body>
+</html>
