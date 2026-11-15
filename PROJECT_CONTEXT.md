@@ -15,9 +15,10 @@ Round-2 arguments are written by `qwen3.8-27b` (kept out of the tested set).
 - Pool: 994 items screened. Gaps (never screened, API timeouts): about 15 deepseek, 4 gemma, 68 qwen. Fill skipped on purpose.
 - Pushback `--k 50` and order ablation (CAD/ADC/DDD) done for all three models.
 - `python3 analyze.py` output is in `results/summary.md`, `results/order_ablation.csv`, `results/fig1..fig5`.
-- Report written as a Claude Docs doc and exported to `FlipRate_report.pdf` (A4, 8 pages, not in git).
-  The byline originally showed the signed-in claude.ai account's name as an author chip; it is now plain text "Naveen" and the PDF was re-exported.
-  Still open in the report: the repository link (private repo) needs adding, and the audit caveat stays until a human confirms the verdicts.
+- Report: `FlipRate_report.pdf` (US Letter, Apart template, 7 pages of main text plus references and appendices),
+  built from `report/report.html` with `node report/build.js`. Author line: Naveen Ragav, Independent.
+  It links the GitHub repo, which must be made public before submitting. The audit caveat stays until a human confirms the verdicts.
+  An older Claude Docs version of the report exists under a different claude.ai account and is superseded.
 
 ## Headline results (round 3, key-audit exclusions applied)
 | Model | n right / wrong | Capitulation | Update | Discrimination |

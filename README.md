@@ -89,6 +89,8 @@ python -m unittest discover tests   # example builder, takeaway sentences, serve
 
 ## Outputs
 
+- `FlipRate_report.pdf`: the sprint report in the Apart Research template. Its source is `report/report.html`; rebuild with `node report/build.js` (needs Playwright with Chromium).
+
 - `results/summary.md`: tables ready to paste into the report (headline, per-round curves, argument effect, confidence, abstention), all with 95% bootstrap CIs.
 - `results/summary.csv`: the same numbers in machine-readable form.
 - `results/fig1_flip_curves.png`: capitulation and update curves per model, with the control as a dashed line.
