@@ -1,0 +1,24 @@
+/* Shared by explainer.html and live.html: colour tokens, base type, nav bar. */
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --fg: #17171a; --muted: #62615d; --line: #e3e1db; --grid: #ece9e2;
+  --c1: #2b6fd6; --c2: #e0702f; --c3: #1f9d73; --c4: #8a5fd1; --ok: #1f9d73; --warn: #c58a12; --bad: #cc4b3c;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Fraunces", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121214; --panel: #1b1b1f; --fg: #ececea; --muted: #a09f99; --line: #2c2c31; --grid: #26262b;
+  --c1: #6ea2ff; --c2: #ff9a5c; --c3: #4fd1a1; --c4: #b79bff; --bad: #f07a6b; --warn: #e0a83a; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+
+.nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.nav .brand { font-family: var(--serif); font-size: 20px; font-weight: 500; color: var(--fg); text-decoration: none; letter-spacing: -0.01em; }
+.nav .links { display: flex; gap: 4px; }
+.nav .links a { padding: 6px 12px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; }
+.nav .links a:hover { color: var(--fg); background: var(--grid); }
+.nav .links a[aria-current="page"] { color: var(--fg); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
+.nav a:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+
+.note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px;
+  padding: 10px 14px; color: var(--muted); max-width: 80ch; }

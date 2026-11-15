@@ -1,7 +1,13 @@
 """Live FlipRate dashboard.
 
-Serves dashboard/index.html and a JSON API computed from the files in runs/ and
-data/ every time they change (including the answer-key audit), so the page updates while experiments run.
+Serves two pages and a JSON API computed from the files in runs/ and data/
+every time they change (including the answer-key audit), so the pages update
+while experiments run.
+
+    /               explainer: the setup, a replay of a real conversation, the metrics
+    /live           live dashboard: progress, headline table, curves, order ablation
+    /api/data       numbers behind the live dashboard
+    /api/examples   real transcripts for the explainer's worked example
 
 Usage (from anywhere):
     python3 dashboard/server.py              # http://127.0.0.1:8765
@@ -29,9 +35,19 @@ import numpy as np  # noqa: E402
 
 import analyze  # noqa: E402  (boot, boot_diff, metric, load)
 from common import excluded_ids, key_audit, read_jsonl  # noqa: E402
+from dashboard.examples import build_examples  # noqa: E402
+from dashboard.takeaways import takeaway  # noqa: E402
 
-PAGE = Path(__file__).resolve().parent / "index.html"
+HERE = Path(__file__).resolve().parent
+STATIC = {
+    "/": ("explainer.html", "text/html; charset=utf-8"),
+    "/index.html": ("explainer.html", "text/html; charset=utf-8"),
+    "/live": ("live.html", "text/html; charset=utf-8"),
+    "/nav.css": ("nav.css", "text/css; charset=utf-8"),
+    "/d3.min.js": ("d3.min.js", "application/javascript"),
+}
 _cache = {}
+_ex_cache = {}
 _lock = threading.Lock()
 
 
@@ -105,7 +121,7 @@ def build(exclude_bad_keys):
     out = {"version": version(), "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
            "exclude_bad_keys": exclude_bad_keys, "pool": len(items),
            "audit": {"flagged": len(audit), "excluded": len(bad), "verdicts": verdicts},
-           "progress": progress, "headline": [], "curves": [], "order": []}
+           "progress": progress, "headline": [], "takeaways": {}, "curves": [], "order": []}
 
     # ------------------------------------------------ pushback metrics
     try:
@@ -136,6 +152,7 @@ def build(exclude_bad_keys):
             "control_drift": num(analyze.boot(drift)[0]),
             "conf_right_r0": conf("A", 0), "conf_right_r3": conf("A", 3),
             "conf_wrong_r0": conf("B", 0), "conf_wrong_r3": conf("B", 3)})
+        out["takeaways"][m] = takeaway(out["headline"][-1])
         for cond, col, label in (("A", "at_target", A), ("B", "at_correct", B)):
             for br in ("pushback", "control"):
                 for r in range(4):
@@ -167,6 +184,31 @@ def get(exclude):
         return data
 
 
+def examples(exclude_bad_keys):
+    """Real conversations for the explainer, straight from runs/."""
+    push, screen = [], []
+    for f in sorted(glob.glob("runs/pushback_*.jsonl")):
+        push += read_jsonl(f)
+    for f in sorted(glob.glob("runs/screen_*.jsonl")):
+        screen += read_jsonl(f)
+    drop = excluded_ids() if exclude_bad_keys else set()
+    out = build_examples(push, read_jsonl("data/items.jsonl"), drop, screen)
+    out["version"] = version()
+    out["exclude_bad_keys"] = exclude_bad_keys
+    return out
+
+
+def get_examples(exclude):
+    v = version()
+    with _lock:
+        hit = _ex_cache.get(exclude)
+        if hit and hit["version"] == v:
+            return hit
+        data = examples(exclude)
+        _ex_cache[exclude] = data
+        return data
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # quiet
         pass
@@ -181,16 +223,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path in ("/", "/index.html"):
-            self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-        elif u.path == "/d3.min.js":
-            self._send(200, (PAGE.parent / "d3.min.js").read_bytes(), "application/javascript")
-        elif u.path == "/api/data":
+        if u.path in STATIC:
+            name, ctype = STATIC[u.path]
+            self._send(200, (HERE / name).read_bytes(), ctype)
+        elif u.path in ("/api/data", "/api/examples"):
             q = parse_qs(u.query)
             exclude = q.get("exclude_bad_keys", ["1"])[0] != "0"
             try:
-                body = json.dumps(get(exclude)).encode()
-                self._send(200, body, "application/json")
+                data = get(exclude) if u.path == "/api/data" else get_examples(exclude)
+                self._send(200, json.dumps(data).encode(), "application/json")
             except Exception as e:  # noqa: BLE001
                 self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
         else:
@@ -203,7 +244,7 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     a = ap.parse_args()
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
-    print(f"FlipRate dashboard: http://{a.host}:{a.port}   (Ctrl-C to stop)")
+    print(f"FlipRate: http://{a.host}:{a.port} (explainer), http://{a.host}:{a.port}/live (dashboard)   Ctrl-C to stop")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
