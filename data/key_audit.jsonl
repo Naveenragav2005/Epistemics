@@ -4,3 +4,55 @@
 {"id": "mmlupro-5863", "key": "D", "consensus": "H", "verdict": "key_wrong", "note": "The first Human Development Report was published by UNDP in 1990 (H), not 1994. Reviewer: Claude."}
 {"id": "mmlupro-7365", "key": "F", "consensus": "G", "verdict": "ambiguous", "note": "With perfectly inelastic demand, consumers bear 100% of the tax whatever the supply elasticity, so F and G are both fully correct. G is the more standard textbook answer. Reviewer: Claude."}
 {"id": "mmlupro-9384", "key": "H", "consensus": "B", "verdict": "key_wrong", "note": "X_L = wL with L = 1 H gives 100, 1000, 10000 ohms in the order asked (B). H lists the same values in a scrambled order. Reviewer: Claude."}
+{"id": "mmlupro-10930", "key": "D", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-11051", "key": "B", "consensus": "A", "verdict": "key_wrong", "note": "Lukianoff and Haidt argue colleges encourage emotional reasoning, which undermines critical thinking. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-11269", "key": "C", "consensus": "D", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-1644", "key": "I", "consensus": "A", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-2045", "key": "A", "consensus": "I", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-3576", "key": "F", "consensus": "C", "verdict": "key_wrong", "note": "Cooling after leaving water is due to evaporation from the skin (C). Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-5884", "key": "G", "consensus": "F", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-7443", "key": "F", "consensus": "E", "verdict": "ambiguous", "note": "High barriers to entry and patents/copyrights both distinguish monopoly from monopolistic competition. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-7511", "key": "B", "consensus": "A", "verdict": "ambiguous", "note": "Roots 1 and 2: the process is both a unit root process and non-stationary, so both options hold. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-9950", "key": "E", "consensus": "F", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-10421", "key": "C", "consensus": "E", "verdict": "ambiguous", "note": "Both 'improve the optimiser' (key) and 'increase model complexity' (consensus) fail to reduce overfitting. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-10495", "key": "A", "consensus": "E", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-10633", "key": "I", "consensus": "C", "verdict": "ambiguous", "note": "Stem asks about testing error but the key speaks of training error; key and consensus are both true statements. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-10704", "key": "D", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-10893", "key": "E", "consensus": "G", "verdict": "key_wrong", "note": "Stevenson: moral disagreement is disagreement in attitude (not interest). Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-11082", "key": "J", "consensus": "I", "verdict": "ambiguous", "note": "Gardiner's 'intergenerational storm' covers both current-generation bias and costs falling on future generations; key and consensus each capture part. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-11195", "key": "I", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-12061", "key": "A", "consensus": "J", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-1721", "key": "A", "consensus": "E", "verdict": "ambiguous", "note": "A sex-segregated dorm rule is arguably a gender classification (intermediate scrutiny, consensus E); key A treats it as rational basis. Contestable. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-1908", "key": "A", "consensus": "F", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-2017", "key": "G", "consensus": "H", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-2080", "key": "D", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-242", "key": "H", "consensus": "B", "verdict": "ambiguous", "note": "Stem asks for 'depreciation per year' but the per-year units-of-production figures differ (1000/1250/900/450); key is the total depreciable base. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-2432", "key": "E", "consensus": "D", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-2749", "key": "C", "consensus": "I", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-3440", "key": "D", "consensus": "F", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-3646", "key": "C", "consensus": "J", "verdict": "key_wrong", "note": "Delta E ~ hbar/delta t = 1.05e-25 J, matching J, not 7e-25 J. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-4173", "key": "H", "consensus": "G", "verdict": "key_wrong", "note": "B1 = pi/(gamma*t) with proton gamma 2.675e8 and t=12.5 us gives 9.4e-4 T, matching G. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-4219", "key": "D", "consensus": "H", "verdict": "key_wrong", "note": "0.1 mm = 0.003937 in; the key 3.94e3 inches is off by a factor of 1e6. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-4424", "key": "C", "consensus": "A", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-4683", "key": "D", "consensus": "F", "verdict": "key_wrong", "note": "Johnson escalated, Nixon de-escalated (Vietnamization): 'escalation vs de-escalation'. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-4701", "key": "D", "consensus": "B", "verdict": "key_wrong", "note": "Minoan culture is distinctive for showing little evidence of warfare. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-4910", "key": "I", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-4987", "key": "B", "consensus": "E", "verdict": "key_wrong", "note": "The passage says ties were fully snapped when the army of Italy entered Rome. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-5025", "key": "A", "consensus": "I", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-5045", "key": "E", "consensus": "G", "verdict": "key_ok", "note": "1826 Pennsylvania anti-kidnapping law reflects the federal vs state conflict (Prigg v. Pennsylvania). Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-5135", "key": "C", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-5284", "key": "C", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-5290", "key": "B", "consensus": "D", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-6214", "key": "G", "consensus": "H", "verdict": "key_wrong", "note": "Redoing the home is a common retiree activity; DJing at clubs is the NOT-one. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-6224", "key": "B", "consensus": "D", "verdict": "key_wrong", "note": "Prone means lying face down; erect is upright. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-6415", "key": "E", "consensus": "H", "verdict": "ambiguous", "note": "Both trisomy 21 (47,XX,+21) and a Robertsonian translocation karyotype are diagnostic of Down syndrome. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-6519", "key": "C", "consensus": "B", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-684", "key": "D", "consensus": "B", "verdict": "key_wrong", "note": "The stem describes the awareness stage. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-6931", "key": "C", "consensus": "J", "verdict": "key_wrong", "note": "GNP counts output of a nation's residents wherever located; the key describes GDP. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-7653", "key": "A", "consensus": "C", "verdict": "key_ok", "note": "Rejecting the null does not mean the alternative is accepted; the key is the incorrect statement. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-8028", "key": "I", "consensus": "D", "verdict": "ambiguous", "note": "28, 42, 56... are divisible by both 14 and 7. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-9517", "key": "A", "consensus": "I", "verdict": "ambiguous", "note": "omega = const and d(omega)/dt = 0 are equivalent. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-9578", "key": "A", "consensus": "F", "verdict": "ambiguous", "note": "Both 60 and 120 degrees give zero resultant amplitude for six equal phasors. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-9599", "key": "D", "consensus": "E", "verdict": "unreviewed", "note": ""}
+{"id": "mmlupro-9682", "key": "E", "consensus": "H", "verdict": "key_wrong", "note": "The key option's text is missing ('nan'); odd harmonics 50, 150, 250 Hz survive. Reviewer: Claude, needs human confirmation."}
+{"id": "mmlupro-11883", "key": "F", "consensus": "D", "verdict": "ambiguous", "note": "Solving the mixing balance (100 lb water, 180 lb/hr in, 120 lb/hr out, 30 lb/hr salt) gives about 0.126 salt mass fraction after 1 hr, matching neither the key (0.26) nor the consensus (0.16); the stem is underspecified. Reviewer: Claude, needs human confirmation."}
