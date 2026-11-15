@@ -10,6 +10,9 @@ Two phases:
                   A -> target = pre-chosen wrong option (distractor)
                   B -> target = the correct answer
               - control:  3 neutral "please restate" turns (baseline drift)
+  order     Same items, one extra branch each in a different rebuttal order
+            (CAD, ADC or DDD; see common.ABLATION_ORDERS), to separate the
+            effect of the rebuttal type from the effect of the round number.
 
 Everything is appended to JSONL as it finishes, so a crash or Ctrl-C loses
 nothing: rerun the same command and it resumes.
@@ -18,6 +21,7 @@ Usage:
     export ADAPTION_API_KEY=...
     python run.py screen   --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash
     python run.py pushback --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash --k 100
+    python run.py order    --models <same models> --k 100   # round/type ablation
     # offline test:  add --mock
 """
 import argparse
@@ -25,7 +29,7 @@ import asyncio
 import random
 
 from common import (
-    CONTROL_TURNS, KEY_AUDIT, append_jsonl, argument_prompt, call, excluded_ids,
+    CONTROL_TURNS, KEY_AUDIT, MAIN_ORDER, ablation_order, append_jsonl, argument_prompt, call, excluded_ids,
     key_audit, make_client, parse, pushback_turns, question_prompt, read_jsonl, safe,
 )
 
@@ -118,37 +122,59 @@ async def branch(client, model, item, base_history, turns, meta):
     append_jsonl(push_path(model), {**meta, "turns": out})
 
 
+def select(args, model, excluded, rng, ablation=False):
+    """Balanced A/B selection for one model.
+
+    The order ablation reuses exactly the items (and A/B conditions) that
+    already have a main pushback branch, so the two are directly comparable.
+    """
+    screened = [r for r in read_jsonl(screen_path(model)) if r["id"] not in excluded]
+    if ablation:
+        cond = {r["id"]: r["condition"] for r in read_jsonl(push_path(model))
+                if r["branch"] == "pushback"}
+        return screened, [(cond[r["id"]], r) for r in screened if r["id"] in cond]
+    right = [r for r in screened if r["correct"]]
+    wrong = [r for r in screened
+             if r["answer"] not in (None, "ABSTAIN") and not r["correct"]]
+    rng.shuffle(right); rng.shuffle(wrong)
+    # Balanced: up to k of each. If the model is rarely wrong, B is smaller;
+    # the report should state the actual n per cell.
+    return screened, [("A", r) for r in right[:args.k]] + [("B", r) for r in wrong[:args.k]]
+
+
 async def pushback(args):
+    """Phase `pushback` runs the main DCA branch plus control.
+    Phase `order` runs one extra branch per item in its ablation order
+    (CAD, ADC or DDD) on the same selected items."""
     client = make_client(args.mock)
     items = {it["id"]: it for it in read_jsonl(ITEMS)}
-    rng = random.Random(args.seed)
     excluded = excluded_ids()
     unreviewed = [i for i, r in key_audit().items() if r.get("verdict") == "unreviewed"]
     if excluded:
         print(f"skipping {len(excluded)} items with bad answer keys ({KEY_AUDIT})")
     if unreviewed:
         print(f"warning: {len(unreviewed)} flagged items still unreviewed in {KEY_AUDIT}")
+    ablation = args.phase == "order"
+    rng = random.Random(args.seed)
 
     for model in args.models:
-        screened = [r for r in read_jsonl(screen_path(model)) if r["id"] not in excluded]
+        screened, sel = select(args, model, excluded, rng, ablation)
         if not screened:
             print(f"[{model}] no screen results; run `screen` first")
             continue
-        right = [r for r in screened if r["correct"]]
-        wrong = [r for r in screened
-                 if r["answer"] not in (None, "ABSTAIN") and not r["correct"]]
-        rng.shuffle(right); rng.shuffle(wrong)
-        # Balanced: up to k of each. If the model is rarely wrong, B is smaller;
-        # the report should state the actual n per cell.
-        sel = [("A", r) for r in right[:args.k]] + [("B", r) for r in wrong[:args.k]]
-        print(f"[{model}] selected A(hold)={min(len(right), args.k)} "
-              f"B(update)={min(len(wrong), args.k)}")
+        if ablation and not sel:
+            print(f"[{model}] no pushback results; run `pushback` first")
+            continue
+        n_a = sum(c == "A" for c, _ in sel)
+        print(f"[{model}] selected A(hold)={n_a} B(update)={len(sel) - n_a}"
+              + (" for the order ablation" if ablation else ""))
 
         needed = []
         for cond, r in sel:
             it = items[r["id"]]
             target = it["distractor"] if cond == "A" else it["answer"]
-            if it["arm"] == "reason":
+            order = ablation_order(it) if ablation else MAIN_ORDER
+            if it["arm"] == "reason" and "C" in order:
                 needed.append((it, target))
         argmap = await get_arguments(client, args.arg_model, needed, args.concurrency)
 
@@ -174,10 +200,17 @@ async def pushback(args):
             }
             async with sem:
                 try:
+                    if ablation:
+                        order = ablation_order(it)
+                        if (it["id"], "order") not in done:
+                            await branch(client, model, it, base,
+                                         pushback_turns(it, target, arg, order),
+                                         {**meta, "branch": "order", "order": order})
+                        return
                     if (it["id"], "pushback") not in done:
                         await branch(client, model, it, base,
                                      pushback_turns(it, target, arg),
-                                     {**meta, "branch": "pushback"})
+                                     {**meta, "branch": "pushback", "order": MAIN_ORDER})
                     if (it["id"], "control") not in done:
                         await branch(client, model, it, base, CONTROL_TURNS,
                                      {**meta, "branch": "control"})
@@ -191,7 +224,7 @@ async def pushback(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=["screen", "pushback"])
+    ap.add_argument("phase", choices=["screen", "pushback", "order"])
     ap.add_argument("--models", nargs="+", required=True)
     ap.add_argument("--k", type=int, default=100, help="max items per condition per model")
     ap.add_argument("--arg-model", default="qwen3.8-27b",

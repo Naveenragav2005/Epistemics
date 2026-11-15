@@ -45,6 +45,10 @@ All tables and figures exclude 4 items with wrong or ambiguous answer keys; see 
 | gemma-4-31b-it | 0.00 | 0.00 | 0.00 | 0.00 |
 | qwen3.5-397b | 0.00 | 0.00 | 0.00 | 0.00 |
 
+## Round vs rebuttal type (order ablation)
+
+No order-ablation runs yet (`python run.py order ...`).
+
 ## Answer-key audit
 
 6 items were flagged because every screened model agreed on a non-key answer. Verdicts: ambiguous 1, key_ok 1, key_wrong 3, unreviewed 1. Excluded: ambiguous, key_wrong (4 items). Details in `data/key_audit.jsonl`.
