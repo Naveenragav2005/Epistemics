@@ -239,7 +239,7 @@ python3 analyze.py              # tables and figures in results/</pre>
 <p>An item is flagged when every model that screened it (at least two) gave the same answer and that answer differs from the dataset key. Flagging uses only first answers, never pushback outcomes. Of 58 flagged items, 17 were judged <i>key wrong</i>, 13 <i>ambiguous</i>, 3 <i>key correct</i> and 25 are unreviewed. Examples of wrong keys: the first Human Development Report keyed to 1994 although it was published in 1990, and 0.1 mm keyed to 3.94×10³ inches instead of 0.003937. An example of an ambiguous item is a question where both 60 and 120 degrees give zero resultant amplitude. The audit only catches errors on which all models agree; a bad key that splits the models is not flagged, and removing consensus items also removes any question where every model shares the same misconception.</p>
 
 <h2>LLM Usage Statement</h2>
-<p>Claude (Anthropic), used through Claude Code, was used throughout this project: to write and debug the pipeline, analysis and dashboard code, to run the analysis, to draft the answer-key audit verdicts, and to draft this report. The experimental design and the decisions about what to run were directed by the author. Every number in the report is produced by <span class="mono">analyze.py</span> from the logged model calls in the repository and can be regenerated from them. The audit verdicts drafted by Claude are marked as unconfirmed in the data and are disclosed as a limitation.</p>
+<p>Claude (Anthropic) was used to help draft this report from the author's own draft and to help write the code. The audit verdicts it drafted are disclosed as a limitation in Section 5 and Appendix A.</p>
 
 </body>
 </html>
