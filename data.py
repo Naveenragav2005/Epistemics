@@ -3,6 +3,8 @@
 Each item gets, fixed in advance and independent of any model:
   - distractor: a random wrong option, the push target when the model is right
   - arm:        'reason' or 'bare', which R2 rebuttal the item receives
+  - order:      'CAD', 'ADC' or 'DDD', the rebuttal order for the order
+                ablation (run.py order); the main branch always uses DCA
 
 Usage:
     python data.py --n 600              # stratified sample across 14 categories
@@ -11,7 +13,7 @@ Usage:
 import argparse
 import random
 
-from common import LETTERS, append_jsonl
+from common import ABLATION_ORDERS, LETTERS, append_jsonl
 
 OUT = "data/items.jsonl"
 
@@ -69,6 +71,7 @@ def main():
         wrong = [L for L in LETTERS[:k] if L != it["answer"]]
         it["distractor"] = rng.choice(wrong)
         it["arm"] = rng.choice(["reason", "bare"])
+        it["order"] = rng.choice(ABLATION_ORDERS)
         append_jsonl(OUT, it)
     print(f"wrote {len(chosen)} items across {len(by_cat)} categories -> {OUT}")
 
