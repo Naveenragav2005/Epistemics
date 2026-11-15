@@ -166,11 +166,15 @@ VERDICTS = EXCLUDE_VERDICTS | {"key_ok", "unreviewed"}
 
 
 def consensus_flags(items, screens, min_models=2):
-    """Items where every screened model gave the same non-key letter.
+    """Items where every model that screened them gave the same non-key letter.
 
     items:   {id: item}
     screens: {model: [screen rows]}
-    Returns {id: consensus_letter}. Needs >= min_models answers per item.
+    Returns {id: consensus_letter}. An item needs answers from >= min_models
+    models; a model that has not screened an item (a partial screen) is simply
+    not counted for it, so one slow model does not switch the audit off for
+    the rest of the pool. More agreeing models is stronger evidence, and two is
+    weak: review every flag before relying on it.
     """
     by_id = {}
     for rows in screens.values():
@@ -178,7 +182,7 @@ def consensus_flags(items, screens, min_models=2):
             by_id.setdefault(r["id"], []).append(r["answer"])
     flags = {}
     for iid, answers in by_id.items():
-        if iid not in items or len(answers) < min_models or len(answers) < len(screens):
+        if iid not in items or len(answers) < min_models:
             continue
         a = set(answers)
         if len(a) == 1:

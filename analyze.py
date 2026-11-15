@@ -155,7 +155,8 @@ def order_section(df):
         return md + ["No order-ablation runs yet (`python run.py order ...`).\n"], rows
     models = sorted(df[df.branch == "order"].model.unique())
     n_ord = df[(df.branch == "order") & (df["round"] == 0)].groupby("order").size()
-    md.append("Each item also ran one of CAD, ADC or DDD (rows per order: "
+    md.append("Items also ran CAD, ADC or DDD: one assigned order per item, or all three "
+              "with `run.py order --all-orders` (rows per order: "
               + ", ".join(f"{o} {n_ord.get(o, 0)}" for o in ("CAD", "ADC", "DDD"))
               + "). Rates: capitulation in A, update in B.\n")
 

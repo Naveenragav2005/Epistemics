@@ -1,7 +1,7 @@
 """Live FlipRate dashboard.
 
 Serves dashboard/index.html and a JSON API computed from the files in runs/ and
-data/ every time they change, so the page updates while experiments run.
+data/ every time they change (including the answer-key audit), so the page updates while experiments run.
 
 Usage (from anywhere):
     python3 dashboard/server.py              # http://127.0.0.1:8765
@@ -28,12 +28,9 @@ sys.path.insert(0, str(ROOT))
 import numpy as np  # noqa: E402
 
 import analyze  # noqa: E402  (boot, boot_diff, metric, load)
-from common import read_jsonl  # noqa: E402
+from common import excluded_ids, key_audit, read_jsonl  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent / "index.html"
-SCHEDULE_NAMES = {"default": "Default (doubt, claim, authority)",
-                  "reversed": "Reversed (authority first)",
-                  "repeat_doubt": "Doubt three times"}
 _cache = {}
 _lock = threading.Lock()
 
@@ -46,7 +43,7 @@ def num(x, nd=3):
 
 
 def data_files():
-    return sorted(glob.glob("runs/*.jsonl") + ["data/items.jsonl", "data/suspect_items.jsonl"])
+    return sorted(glob.glob("runs/*.jsonl") + ["data/items.jsonl", "data/key_audit.jsonl"])
 
 
 def version():
@@ -71,10 +68,18 @@ def tokens(rows, nested=False):
     return {"input": i, "output": o}
 
 
-def build(exclude_suspects):
+ORDER_NAMES = {"DCA": "DCA: doubt, claim, authority (main)", "CAD": "CAD: claim, authority, doubt",
+               "ADC": "ADC: authority, doubt, claim", "DDD": "DDD: doubt three times"}
+
+
+def build(exclude_bad_keys):
     items = read_jsonl("data/items.jsonl")
-    suspects = read_jsonl("data/suspect_items.jsonl")
-    bad = {r["id"] for r in suspects} if exclude_suspects else set()
+    audit = key_audit()
+    verdicts = {}
+    for r in audit.values():
+        verdicts[r["verdict"]] = verdicts.get(r["verdict"], 0) + 1
+    bad = excluded_ids()                      # key_wrong / ambiguous after review
+    drop = bad if exclude_bad_keys else set()
     models = sorted({Path(f).stem.split("_", 1)[1]
                      for f in glob.glob("runs/screen_*.jsonl") + glob.glob("runs/pushback_*.jsonl")})
 
@@ -83,33 +88,32 @@ def build(exclude_suspects):
     for m in models:
         s = read_jsonl(f"runs/screen_{m}.jsonl")
         p = read_jsonl(f"runs/pushback_{m}.jsonl")
-        o = read_jsonl(f"runs/order_{m}.jsonl")
         answered = [r for r in s if r["answer"] not in (None, "ABSTAIN")]
-        sus = {r["id"] for r in suspects}
         wrong = [r for r in answered if not r["correct"]]
         progress.append({
             "model": m, "pool": len(items), "screened": len(s),
             "accuracy": num(sum(r["correct"] for r in answered) / len(answered)) if answered else None,
             "wrong_total": len(wrong),
-            "wrong_suspect": sum(r["id"] in sus for r in wrong),
-            "wrong_genuine": sum(r["id"] not in sus for r in wrong),
+            "wrong_bad_key": sum(r["id"] in bad for r in wrong),
+            "wrong_unreviewed": sum(audit.get(r["id"], {}).get("verdict") == "unreviewed" for r in wrong),
+            "wrong_genuine": sum(r["id"] not in bad for r in wrong),
             "pushed_items": len({r["id"] for r in p if r["branch"] == "pushback"}),
-            "order_runs": len(o),
-            "tokens_screen": tokens(s), "tokens_pushback": tokens(p, True), "tokens_order": tokens(o, True),
+            "order_runs": sum(r["branch"] == "order" for r in p),
+            "tokens_screen": tokens(s), "tokens_pushback": tokens(p, True),
         })
 
     out = {"version": version(), "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
-           "exclude_suspects": exclude_suspects, "pool": len(items),
-           "suspects": len(suspects), "progress": progress,
-           "headline": [], "curves": [], "order": []}
+           "exclude_bad_keys": exclude_bad_keys, "pool": len(items),
+           "audit": {"flagged": len(audit), "excluded": len(bad), "verdicts": verdicts},
+           "progress": progress, "headline": [], "curves": [], "order": []}
 
     # ------------------------------------------------ pushback metrics
     try:
         df = analyze.load()
     except SystemExit:
         return out
-    removed = int(df[df.id.isin(bad)].id.nunique()) if bad else 0
-    df = df[~df.id.isin(bad)]
+    removed = int(df[df.id.isin(drop)].id.nunique()) if drop else 0
+    df = df[~df.id.isin(drop)]
     out["removed_from_analysis"] = removed
     if df.empty:
         return out
@@ -122,8 +126,8 @@ def build(exclude_suspects):
         c, u, d = analyze.boot(cap), analyze.boot(upd), analyze.boot_diff(upd, cap)
 
         def conf(cond, rnd):
-            return num(analyze.metric(df, m, cond, "pushback", rnd, "confidence").mean(), 1) \
-                if len(analyze.metric(df, m, cond, "pushback", rnd, "confidence")) else None
+            v = analyze.metric(df, m, cond, "pushback", rnd, "confidence")
+            return num(v.mean(), 1) if len(v) else None
         out["headline"].append({
             "model": m, "n_right": len(cap), "n_wrong": len(upd),
             "capitulation": num(c[0]), "cap_lo": num(c[1]), "cap_hi": num(c[2]),
@@ -140,28 +144,15 @@ def build(exclude_suspects):
                     out["curves"].append({"model": m, "series": label, "branch": br, "round": r,
                                           "rate": num(b[0]), "lo": num(b[1]), "hi": num(b[2]), "n": len(v)})
 
-    # ------------------------------------------------ order ablation
-    rows, order_ids = [], {}
-    for f in glob.glob("runs/order_*.jsonl"):
-        for rec in read_jsonl(f):
-            if rec["id"] in bad:
-                continue
-            order_ids.setdefault((rec["model"], rec["condition"]), set()).add(rec["id"])
-            tgt = rec["target"] if rec["condition"] == "A" else rec["correct"]
-            for r, t in enumerate(rec["turns"], start=1):
-                rows.append((rec["model"], rec["condition"], rec["schedule"], r, t["answer"] == tgt))
-    pb = df[(df.branch == "pushback") & (df["round"] > 0)]
-    for x in pb.itertuples():
-        if x.id in order_ids.get((x.model, x.condition), set()):     # compare on the same items
-            rows.append((x.model, x.condition, "default", int(x.round),
-                         bool(x.at_target if x.condition == "A" else x.at_correct)))
-    agg = {}
-    for m, c, s, r, hit in rows:
-        agg.setdefault((m, c, s, r), []).append(hit)
-    for (m, c, s, r), v in sorted(agg.items()):
-        out["order"].append({"model": m, "series": A if c == "A" else B,
-                             "schedule": SCHEDULE_NAMES[s], "round": r,
-                             "rate": num(np.mean(v)), "n": len(v)})
+    # ------------------------------------------------ order ablation (branch "order" + main DCA)
+    o = df[df.branch.isin(["pushback", "order"]) & (df["round"] > 0) & df.order.notna()]
+    for (m, cond, order, r), g in o.groupby(["model", "condition", "order", "round"]):
+        hit = g["at_target"] if cond == "A" else g["at_correct"]
+        out["order"].append({"model": m, "series": A if cond == "A" else B,
+                             "schedule": ORDER_NAMES.get(order, order), "round": int(r),
+                             "rate": num(hit.astype(float).mean()), "n": int(len(g))})
+    if not any(x["schedule"] != ORDER_NAMES["DCA"] for x in out["order"]):
+        out["order"] = []          # nothing to compare until `run.py order` has run
     return out
 
 
@@ -196,7 +187,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, (PAGE.parent / "d3.min.js").read_bytes(), "application/javascript")
         elif u.path == "/api/data":
             q = parse_qs(u.query)
-            exclude = q.get("exclude_suspects", ["1"])[0] != "0"
+            exclude = q.get("exclude_bad_keys", ["1"])[0] != "0"
             try:
                 body = json.dumps(get(exclude)).encode()
                 self._send(200, body, "application/json")

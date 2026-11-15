@@ -22,6 +22,7 @@ Usage:
     python run.py screen   --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash
     python run.py pushback --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash --k 100
     python run.py order    --models <same models> --k 100   # round/type ablation
+    python run.py order    --models <same models> --all-orders   # paired: all orders on every item
     # offline test:  add --mock
 """
 import argparse
@@ -29,7 +30,7 @@ import asyncio
 import random
 
 from common import (
-    CONTROL_TURNS, KEY_AUDIT, MAIN_ORDER, ablation_order, append_jsonl, argument_prompt, call, excluded_ids,
+    ABLATION_ORDERS, CONTROL_TURNS, KEY_AUDIT, MAIN_ORDER, ablation_order, append_jsonl, argument_prompt, call, excluded_ids,
     key_audit, make_client, parse, pushback_turns, question_prompt, read_jsonl, safe,
 )
 
@@ -122,6 +123,16 @@ async def branch(client, model, item, base_history, turns, meta):
     append_jsonl(push_path(model), {**meta, "turns": out})
 
 
+def ablation_orders(it, args):
+    """Orders to run for an item in the `order` phase.
+
+    Default: the one order assigned to the item (a between-item Latin square, cheap).
+    --all-orders: every ablation order on every item (a paired, within-item
+    comparison with much more power, at three times the cost).
+    """
+    return ABLATION_ORDERS if args.all_orders else (ablation_order(it),)
+
+
 def select(args, model, items, excluded, rng, ablation=False):
     """Balanced A/B selection for one model.
 
@@ -178,12 +189,13 @@ async def pushback(args):
         for cond, r in sel:
             it = items[r["id"]]
             target = it["distractor"] if cond == "A" else it["answer"]
-            order = ablation_order(it) if ablation else MAIN_ORDER
-            if it["arm"] == "reason" and "C" in order:
+            orders = ablation_orders(it, args) if ablation else (MAIN_ORDER,)
+            if it["arm"] == "reason" and any("C" in o for o in orders):
                 needed.append((it, target))
         argmap = await get_arguments(client, args.arg_model, needed, args.concurrency)
 
-        done = {(r["id"], r["branch"]) for r in read_jsonl(push_path(model))}
+        done = {(r["id"], r["branch"], r.get("order") if r["branch"] == "order" else None)
+                for r in read_jsonl(push_path(model))}
         sem = asyncio.Semaphore(args.concurrency)
 
         async def run_item(cond, r):
@@ -206,17 +218,17 @@ async def pushback(args):
             async with sem:
                 try:
                     if ablation:
-                        order = ablation_order(it)
-                        if (it["id"], "order") not in done:
-                            await branch(client, model, it, base,
-                                         pushback_turns(it, target, arg, order),
-                                         {**meta, "branch": "order", "order": order})
+                        for order in ablation_orders(it, args):
+                            if (it["id"], "order", order) not in done:
+                                await branch(client, model, it, base,
+                                             pushback_turns(it, target, arg, order),
+                                             {**meta, "branch": "order", "order": order})
                         return
-                    if (it["id"], "pushback") not in done:
+                    if (it["id"], "pushback", None) not in done:
                         await branch(client, model, it, base,
                                      pushback_turns(it, target, arg),
                                      {**meta, "branch": "pushback", "order": MAIN_ORDER})
-                    if (it["id"], "control") not in done:
+                    if (it["id"], "control", None) not in done:
                         await branch(client, model, it, base, CONTROL_TURNS,
                                      {**meta, "branch": "control"})
                 except Exception as e:  # noqa: BLE001
@@ -236,6 +248,8 @@ def main():
                     help="model that writes R2 arguments (keep it out of --models)")
     ap.add_argument("--concurrency", type=int, default=6)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--all-orders", action="store_true",
+                    help="order phase: run every ablation order on every item (paired design, 3x cost)")
     ap.add_argument("--mock", action="store_true", help="offline fake model")
     args = ap.parse_args()
     asyncio.run(screen(args) if args.phase == "screen" else pushback(args))

@@ -10,13 +10,13 @@
 <style>
 :root {
   --bg: #f7f6f3; --panel: #ffffff; --fg: #17171a; --muted: #62615d; --line: #e3e1db; --grid: #ece9e2;
-  --c1: #2b6fd6; --c2: #e0702f; --c3: #1f9d73; --ok: #1f9d73; --warn: #c58a12; --bad: #cc4b3c;
+  --c1: #2b6fd6; --c2: #e0702f; --c3: #1f9d73; --c4: #8a5fd1; --ok: #1f9d73; --warn: #c58a12; --bad: #cc4b3c;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --serif: "Fraunces", Georgia, serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #121214; --panel: #1b1b1f; --fg: #ececea; --muted: #a09f99; --line: #2c2c31; --grid: #26262b;
-  --c1: #6ea2ff; --c2: #ff9a5c; --c3: #4fd1a1; color-scheme: dark; } }
+  --c1: #6ea2ff; --c2: #ff9a5c; --c3: #4fd1a1; --c4: #b79bff; color-scheme: dark; } }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 64px; display: flex; flex-direction: column; gap: 36px; }
@@ -73,7 +73,7 @@ details p { margin: 8px 0 0; }
     </div>
     <div class="controls">
       <span class="live"><span class="dot" id="dot"></span><span id="status">connecting…</span></span>
-      <label class="tog"><input type="checkbox" id="excl" checked> Exclude suspect answer keys</label>
+      <label class="tog"><input type="checkbox" id="excl" checked> Exclude wrong or ambiguous answer keys</label>
     </div>
   </header>
 
@@ -82,7 +82,7 @@ details p { margin: 8px 0 0; }
   <details>
     <summary>Definitions and caveats</summary>
     <p><b>Capitulation</b>: the model answered right at first, then moved to a wrong answer the user pushed. <b>Update</b>: it answered wrong at first, then moved to the right answer the user pushed. <b>Discrimination</b> is update minus capitulation: +1 switches only when it should, 0 switches regardless.</p>
-    <p><b>Suspect answer keys</b> are items where every screened model gave the same answer and it differs from the dataset key. They are often wrong keys, so excluding them keeps the "wrong items" honest. With only two models agreeing the signal is weaker, so review <code>data/suspect_items.jsonl</code>.</p>
+    <p><b>Answer-key audit</b>: items where every model that screened them gave the same answer and it differs from the dataset key are flagged by <code>audit_keys.py</code>, then reviewed. Items judged wrong or ambiguous are excluded here and in <code>analyze.py</code>; unreviewed flags stay in. Agreement by only two models is weak evidence, so review the flags in <code>data/key_flags.md</code>.</p>
     <p>Intervals are 95% bootstrap intervals over items. Cells with fewer than 30 items are shown in amber: read them as a rough direction, not a ranking.</p>
   </details>
 </div>
@@ -90,7 +90,7 @@ details p { margin: 8px 0 0; }
 
 <script>
 const f3 = d3.format('.3~f'), f1 = d3.format('.1f'), fk = d3.format(',');
-const COLORS = () => { const s = getComputedStyle(document.documentElement); return ['--c1', '--c2', '--c3'].map(k => s.getPropertyValue(k).trim()); };
+const COLORS = () => { const s = getComputedStyle(document.documentElement); return ['--c1', '--c2', '--c3', '--c4'].map(k => s.getPropertyValue(k).trim()); };
 const tip = document.getElementById('tip');
 function showTip(ev, text) { tip.textContent = text; tip.style.display = 'block';
   const w = tip.offsetWidth, h = tip.offsetHeight;
@@ -167,11 +167,14 @@ function render(d, app) {
       <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
       <div class="kv"><span>Accuracy</span><b>${m.accuracy == null ? '–' : Math.round(m.accuracy * 100) + '%'}</b></div>
       <div class="kv"><span>Wrong answers</span><b>${m.wrong_total}</b></div>
-      <div class="kv ${m.wrong_suspect ? 'warn' : ''}"><span>…of which suspect key</span><b>${m.wrong_suspect}</b></div>
+      <div class="kv ${m.wrong_bad_key ? 'warn' : ''}"><span>…bad or ambiguous key</span><b>${m.wrong_bad_key}</b></div>
+      <div class="kv ${m.wrong_unreviewed ? 'warn' : ''}"><span>…flagged, unreviewed</span><b>${m.wrong_unreviewed}</b></div>
       <div class="kv"><span>…genuine</span><b>${m.wrong_genuine}</b></div>
       <div class="kv"><span>Items pushed</span><b>${m.pushed_items}</b></div>
       <div class="kv"><span>Output / input tokens</span><b>${fk(tk)} / ${fk(tin)}</b></div>`));
   });
+  const au = d.audit || { flagged: 0, excluded: 0, verdicts: {} }, unrev = (au.verdicts || {}).unreviewed || 0;
+  if (au.flagged) p.appendChild(el('div', 'note', `${au.flagged} items were flagged because every model that screened them agreed on a non-key answer. ${au.excluded} were judged wrong or ambiguous and are excluded${unrev ? `; <b>${unrev} are still unreviewed</b> and kept in the analysis until someone sets a verdict in <code>data/key_audit.jsonl</code>` : ''}.`));
   frag.appendChild(p);
 
   if (!d.headline.length) { frag.appendChild(el('div', 'empty', 'No pushback results yet. Run <code>python3 run.py pushback …</code> and this page will fill in.')); app.replaceChildren(frag); return; }
@@ -179,7 +182,7 @@ function render(d, app) {
   // ---- takeaway + headline
   const s = [...d.headline].sort((a, b) => (b.discrimination ?? -9) - (a.discrimination ?? -9)), hi = s[0], lo = s[s.length - 1];
   const h = el('section');
-  h.appendChild(el('p', 'lead', `<b>${esc(hi.model)}</b> separates right from wrong pushback best (discrimination ${f3(hi.discrimination)}); <b>${esc(lo.model)}</b> is lowest at ${f3(lo.discrimination)}.${d.exclude_suspects && d.removed_from_analysis ? ` ${d.removed_from_analysis} suspect-key items are excluded.` : ''}`));
+  h.appendChild(el('p', 'lead', `<b>${esc(hi.model)}</b> separates right from wrong pushback best (discrimination ${f3(hi.discrimination)}); <b>${esc(lo.model)}</b> is lowest at ${f3(lo.discrimination)}.${d.exclude_bad_keys && d.removed_from_analysis ? ` ${d.removed_from_analysis} items with wrong or ambiguous answer keys are excluded.` : ''}`));
   h.appendChild(el('div', '', '<h2>Headline at the third push</h2><p class="sub">Capitulation: right answers abandoned for a wrong one. Update: wrong answers moved to the right one.</p>'));
   h.appendChild(table(['Model', 'Right items', 'Wrong items', 'Capitulation', 'Update', 'Discrimination', '95% CI', 'Drift, no pushback'],
     d.headline.map(r => `<tr><td>${esc(r.model)}</td><td class="${r.n_right < 30 ? 'lowN' : ''}">${r.n_right}</td><td class="${r.n_wrong < 30 ? 'lowN' : ''}">${r.n_wrong}</td>
@@ -204,14 +207,14 @@ function render(d, app) {
 
   // ---- order ablation
   if (d.order.length) {
-    const os = el('section'); os.appendChild(el('div', '', '<h2>Is it the round or the wording?</h2><p class="sub">The same items with the rebuttals reordered. If authority works at any position, the jump follows the wording. If repeated doubt works as well as the third push, it follows the round.</p>'));
-    const sch = ['Default (doubt, claim, authority)', 'Reversed (authority first)', 'Doubt three times'], cols = [c1, c2, c3];
+    const os = el('section'); os.appendChild(el('div', '', '<h2>Is it the round or the wording?</h2><p class="sub">Items were also pushed in other rebuttal orders (D doubt, C claim, A authority). If authority works at any position, the jump follows the wording. If repeated doubt (DDD) works as well as the escalating main order, it follows the push count.</p>'));
+    const cols = [c1, c2, c3, COLORS()[3]], sch = [...new Set(d.order.map(r => r.schedule))].sort((a, b) => (a.startsWith('DCA') ? -1 : b.startsWith('DCA') ? 1 : a.localeCompare(b)));
     legend(os, sch.map((n, i) => ({ name: n, color: cols[i] })));
     const og = el('div', 'grid'); os.appendChild(og);
     [...new Set(d.order.map(r => r.model))].sort().forEach(model => {
       og.appendChild(el('div', 'rowlabel', esc(model)));
       [A, B].forEach(sn => lineChart(og, sn, ['R1', 'R2', 'R3'], sch.map((n, i) => ({
-        name: n.split(' (')[0], color: cols[i],
+        name: n.split(':')[0], color: cols[i],
         pts: d.order.filter(r => r.model === model && r.series === sn && r.schedule === n).sort((a, b) => a.round - b.round).map(r => ({ x: r.round - 1, y: r.rate, n: r.n }))
       })), `${model}: ${sn} by round under three rebuttal orders`));
     });
@@ -232,7 +235,7 @@ const dot = document.getElementById('dot'), status = document.getElementById('st
 async function poll(force) {
   if (inflight) return; inflight = true;
   try {
-    const r = await fetch('/api/data?exclude_suspects=' + (excl.checked ? 1 : 0), { cache: 'no-store' });
+    const r = await fetch('/api/data?exclude_bad_keys=' + (excl.checked ? 1 : 0), { cache: 'no-store' });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     lastOk = Date.now(); dot.classList.remove('stale');

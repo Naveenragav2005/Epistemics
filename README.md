@@ -55,6 +55,8 @@ python run.py pushback --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it gl
 
 # 5. Order ablation: same items, one extra conversation each in order CAD, ADC or DDD
 python run.py order --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash --k 100
+# ...or, for a paired within-item comparison, every order on every item (3x the cost):
+python run.py order --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it --k 100 --all-orders
 
 # 6. Metrics, tables and figures -> results/
 python analyze.py
@@ -62,11 +64,19 @@ python analyze.py
 
 Every call is appended to `runs/*.jsonl` as it finishes. If a run crashes or you stop it, rerun the same command and it picks up where it left off. Transient errors (5xx, 429, timeouts) are retried with exponential backoff.
 
-**Answer-key audit.** MMLU-Pro has some wrong keys. In condition B a wrong key counts as "failed to update" when the model is actually right, so bad keys inflate apparent stubbornness. `audit_keys.py` flags every item where all screened models give the same non-key answer. It uses only the turn-0 screen, never pushback outcomes, so the filter cannot be tuned to the metric. Consensus is not proof, since models can share a misconception, so flagged items are not dropped automatically. Each flag gets a row in `data/key_audit.jsonl`, and a person sets `verdict` to `key_wrong`, `ambiguous` (both excluded) or `key_ok` (kept). `run.py pushback` and `analyze.py` skip excluded items. `results/summary.md` lists every flag and reports the headline with and without them. `data/key_flags.md` is a review sheet showing each flagged question with both options.
+**Answer-key audit.** MMLU-Pro has some wrong keys. In condition B a wrong key counts as "failed to update" when the model is actually right, so bad keys inflate apparent stubbornness. `audit_keys.py` flags every item where all screened models give the same non-key answer. It uses only the turn-0 screen, never pushback outcomes, so the filter cannot be tuned to the metric. Consensus is not proof, since models can share a misconception, so flagged items are not dropped automatically. Each flag gets a row in `data/key_audit.jsonl`, and a person sets `verdict` to `key_wrong`, `ambiguous` (both excluded) or `key_ok` (kept). `run.py pushback` and `analyze.py` skip excluded items. `results/summary.md` lists every flag and reports the headline with and without them. `data/key_flags.md` is a review sheet showing each flagged question with both options. A model that has not screened an item yet (a partial or still-running screen) is simply not counted for it, and an item needs at least `--min-models` answers (default 2) to be flagged; agreement by only two models is weak evidence, so review those flags carefully. `python audit_keys.py --models a b` restricts the audit to chosen models.
 
 **Pilot first:** run `data.py --n 60` and `--k 10` to check the cost per conversation in the Adaption app before the full run.
 
 **Offline test:** `python data.py --synthetic --n 120` and then add `--mock` to every `run.py` command. This exercises the whole pipeline with a fake model.
+
+## Live dashboard
+
+```bash
+python dashboard/server.py        # then open http://127.0.0.1:8765
+```
+
+A small local web app (standard library server plus a vendored `d3`, no extra dependencies, works offline) that recomputes every number from `runs/` and `data/` whenever they change and redraws itself every few seconds, so it fills in while `screen`, `pushback` and `order` are running. It shows run progress and token spend per model, the headline table with discrimination intervals, flip curves with the control, the order ablation per rebuttal order, and stated confidence. A toggle excludes items whose key was judged wrong or ambiguous (on by default), and cells with fewer than 30 items are marked. The server only reads files; it never calls the Adaption API.
 
 ## Outputs
 
@@ -88,8 +98,12 @@ Every call is appended to `runs/*.jsonl` as it finishes. If a run crashes or you
 - Arguments come from `qwen3.8-27b`, a model kept out of the tested set. Arguments for wrong answers are flawed by construction, and arguments for correct answers are usually sound. That asymmetry is intentional: it is what a model *should* be able to detect.
 - Answers are parsed from an `Answer:` / `Confidence:` line. The parse-failure rate is reported, and failures count as "not at target".
 - The key audit only catches errors that all models agree on. A bad key that splits the models is not flagged, and removing consensus items also removes any questions where every model shares the same misconception. Report the sensitivity table alongside the headline.
-- The order ablation is between-item: each item gets one ablation order, so each order sees about a third of the items. This costs one extra conversation per item. Per-cell n is reported; with `--k 100` expect roughly 30 items per order per condition. Item pools built before the ablation existed get their order from a hash of the item id.
+- The order ablation is between-item: each item gets one ablation order, so each order sees about a third of the items. This costs one extra conversation per item. Per-cell n is reported; with `--k 100` expect roughly 30 items per order per condition. `run.py order --all-orders` runs every ablation order on every item instead, a paired within-item comparison with much more power at three times the cost. Item pools built before the ablation existed get their order from a hash of the item id.
 - Abstention (`ABSTAIN`) is allowed and tracked separately, so retreating to uncertainty is distinguished from caving.
+
+## Archived runs
+
+`runs/legacy/` holds an earlier, separate order-ablation run on the pilot (reversed order and a verbatim triple doubt). Its rebuttal wording differs from the current design, so `analyze.py` and the dashboard ignore it. See `runs/legacy/README.md`.
 
 ## Provenance
 

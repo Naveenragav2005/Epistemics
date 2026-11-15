@@ -1,7 +1,7 @@
 """Flag likely answer-key errors for human review.
 
-An item is flagged when every screened model gives the same answer and that
-answer is not the MMLU-Pro key. Consensus against the key is a cheap signal of
+An item is flagged when every model that screened it (at least --min-models of
+them) gives the same answer and that answer is not the MMLU-Pro key. Consensus against the key is a cheap signal of
 a bad key, but not proof: models can share a misconception. So flags are NOT
 dropped automatically. Each one gets a row in data/key_audit.jsonl with
 verdict "unreviewed"; a person sets it to one of
@@ -36,14 +36,16 @@ SHEET = "data/key_flags.md"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--min-models", type=int, default=2,
-                    help="minimum screened models needed to flag an item")
+                    help="minimum models that answered an item for it to be flagged")
+    ap.add_argument("--models", nargs="+", default=None,
+                    help="only use screens from these models (default: all in runs/)")
     a = ap.parse_args()
 
     items = {it["id"]: it for it in read_jsonl(ITEMS)}
     screens = {}
     for f in sorted(glob.glob("runs/screen_*.jsonl")):
         rows = read_jsonl(f)
-        if rows:
+        if rows and (a.models is None or rows[0]["model"] in a.models):
             screens[rows[0]["model"]] = rows
     if len(screens) < a.min_models:
         raise SystemExit(f"need screens from >= {a.min_models} models; found {len(screens)}")
@@ -62,8 +64,8 @@ def main():
     audit = key_audit()
 
     lines = [f"# Answer-key flags\n",
-             f"{len(flags)} of {len(items)} items: all {len(screens)} screened models "
-             f"({', '.join(screens)}) agree on a non-key answer.\n",
+             f"{len(flags)} of {len(items)} items: every model that screened them "
+             f"({', '.join(screens)}; at least {a.min_models} per item) agrees on a non-key answer.\n",
              f"Set each verdict in `{KEY_AUDIT}`. Excluded verdicts: "
              f"{', '.join(sorted(EXCLUDE_VERDICTS))}.\n"]
     for iid in sorted(flags, key=lambda i: (audit[i]["verdict"], i)):
