@@ -122,13 +122,18 @@ async def branch(client, model, item, base_history, turns, meta):
     append_jsonl(push_path(model), {**meta, "turns": out})
 
 
-def select(args, model, excluded, rng, ablation=False):
+def select(args, model, items, excluded, rng, ablation=False):
     """Balanced A/B selection for one model.
 
     The order ablation reuses exactly the items (and A/B conditions) that
     already have a main pushback branch, so the two are directly comparable.
     """
-    screened = [r for r in read_jsonl(screen_path(model)) if r["id"] not in excluded]
+    rows = read_jsonl(screen_path(model))
+    screened = [r for r in rows if r["id"] in items and r["id"] not in excluded]
+    stale = sum(r["id"] not in items for r in rows)
+    if stale:
+        print(f"[{model}] ignoring {stale} screen rows for items not in {ITEMS} "
+              "(from an older item pool; archive old runs/ before a new pool)")
     if ablation:
         cond = {r["id"]: r["condition"] for r in read_jsonl(push_path(model))
                 if r["branch"] == "pushback"}
@@ -158,7 +163,7 @@ async def pushback(args):
     rng = random.Random(args.seed)
 
     for model in args.models:
-        screened, sel = select(args, model, excluded, rng, ablation)
+        screened, sel = select(args, model, items, excluded, rng, ablation)
         if not screened:
             print(f"[{model}] no screen results; run `screen` first")
             continue
