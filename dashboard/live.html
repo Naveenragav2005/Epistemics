@@ -1,24 +1,15 @@
 <!doctype html>
+<!-- page:live -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FlipRate Live</title>
+<title>FlipRate: live results</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/nav.css">
 <script src="/d3.min.js"></script>
 <style>
-:root {
-  --bg: #f7f6f3; --panel: #ffffff; --fg: #17171a; --muted: #62615d; --line: #e3e1db; --grid: #ece9e2;
-  --c1: #2b6fd6; --c2: #e0702f; --c3: #1f9d73; --c4: #8a5fd1; --ok: #1f9d73; --warn: #c58a12; --bad: #cc4b3c;
-  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --serif: "Fraunces", Georgia, serif;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #121214; --panel: #1b1b1f; --fg: #ececea; --muted: #a09f99; --line: #2c2c31; --grid: #26262b;
-  --c1: #6ea2ff; --c2: #ff9a5c; --c3: #4fd1a1; --c4: #b79bff; color-scheme: dark; } }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 64px; display: flex; flex-direction: column; gap: 36px; }
 header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
 h1 { font-family: var(--serif); font-weight: 500; font-size: 36px; margin: 0; letter-spacing: -0.01em; line-height: 1.05; }
@@ -56,9 +47,11 @@ th:first-child, td:first-child { text-align: left; }
 th { font-size: 12px; font-weight: 500; color: var(--muted); }
 td.lowN { color: var(--warn); }
 .rowlabel { grid-column: 1 / -1; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 6px; }
-.note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px; padding: 10px 14px; color: var(--muted); max-width: 80ch; }
 .empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; }
 #tip { position: fixed; z-index: 20; pointer-events: none; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 6px 9px; border-radius: 6px; font-size: 12px; white-space: nowrap; display: none; }
+ul.takes { margin: 0; padding-left: 18px; max-width: 80ch; color: var(--muted); }
+ul.takes li { margin: 2px 0; }
+.sub a, .note a { color: var(--c1); }
 details { color: var(--muted); max-width: 80ch; }
 details summary { color: var(--fg); cursor: pointer; }
 details p { margin: 8px 0 0; }
@@ -66,16 +59,22 @@ details p { margin: 8px 0 0; }
 </head>
 <body>
 <div class="wrap">
+  <nav class="nav" aria-label="Pages">
+    <a class="brand" href="/">FlipRate</a>
+    <div class="links"><a href="/">Explainer</a><a href="/live" aria-current="page">Live results</a></div>
+  </nav>
   <header>
     <div>
-      <h1>FlipRate</h1>
-      <p class="sub" style="margin-top:8px">Does a model change its answer because the user is right, or only because the user pushed? This page reads the experiment files directly and updates as new results arrive.</p>
+      <h1>Live results</h1>
+      <p class="sub" style="margin-top:8px">Does a model change its answer because the user is right, or only because the user pushed? This page reads the experiment files directly and updates as new results arrive. New here? <a href="/">Start with the explainer</a>, which replays a real conversation.</p>
     </div>
     <div class="controls">
       <span class="live"><span class="dot" id="dot"></span><span id="status">connecting…</span></span>
       <label class="tog"><input type="checkbox" id="excl" checked> Exclude wrong or ambiguous answer keys</label>
     </div>
   </header>
+
+  <div class="note" id="sample">Every cell shows its n. Cells with fewer than 30 items are amber: read them as a rough direction, not a ranking.</div>
 
   <div id="app"><div class="empty">Loading results…</div></div>
 
@@ -158,7 +157,7 @@ function render(d, app) {
   const [c1, c2, c3] = COLORS(), frag = document.createDocumentFragment();
 
   // ---- progress
-  const p = el('section'); p.appendChild(el('div', '', '<h2>Run progress</h2><p class="sub">Items screened per model, how many answers were genuinely wrong, and tokens spent so far.</p>'));
+  const p = el('section'); p.appendChild(el('div', '', '<h2>Run progress</h2><p class="sub">What you\'re seeing: one card per model, with how much of the item pool it has answered once, how many of its wrong answers are genuine rather than bad answer keys, and tokens spent so far.</p>'));
   const g = el('div', 'grid'); p.appendChild(g);
   d.progress.forEach(m => {
     const pct = m.pool ? 100 * m.screened / m.pool : 0, tk = m.tokens_screen.output + m.tokens_pushback.output;
@@ -183,16 +182,18 @@ function render(d, app) {
   const s = [...d.headline].sort((a, b) => (b.discrimination ?? -9) - (a.discrimination ?? -9)), hi = s[0], lo = s[s.length - 1];
   const h = el('section');
   h.appendChild(el('p', 'lead', `<b>${esc(hi.model)}</b> separates right from wrong pushback best (discrimination ${f3(hi.discrimination)}); <b>${esc(lo.model)}</b> is lowest at ${f3(lo.discrimination)}.${d.exclude_bad_keys && d.removed_from_analysis ? ` ${d.removed_from_analysis} items with wrong or ambiguous answer keys are excluded.` : ''}`));
-  h.appendChild(el('div', '', '<h2>Headline at the third push</h2><p class="sub">Capitulation: right answers abandoned for a wrong one. Update: wrong answers moved to the right one.</p>'));
+  h.appendChild(el('div', '', '<h2>Headline at the third push</h2><p class="sub">What you\'re seeing: where each model\'s answers stand after three rounds of pushback. Capitulation is the share of right answers abandoned for the wrong one the user pushed; update is the share of wrong answers moved to the right one; discrimination is update minus capitulation.</p>'));
   h.appendChild(table(['Model', 'Right items', 'Wrong items', 'Capitulation', 'Update', 'Discrimination', '95% CI', 'Drift, no pushback'],
     d.headline.map(r => `<tr><td>${esc(r.model)}</td><td class="${r.n_right < 30 ? 'lowN' : ''}">${r.n_right}</td><td class="${r.n_wrong < 30 ? 'lowN' : ''}">${r.n_wrong}</td>
       <td>${f3(r.capitulation)}</td><td>${f3(r.update)}</td><td><b>${f3(r.discrimination)}</b></td><td>${f3(r.disc_lo)} to ${f3(r.disc_hi)}</td><td>${f3(r.control_drift)}</td></tr>`)));
+  const tk = d.takeaways || {};
+  if (Object.keys(tk).length) h.appendChild(el('ul', 'takes', d.headline.filter(r => tk[r.model]).map(r => `<li>${esc(tk[r.model])}</li>`).join('')));
   const dc = el('div', 'card'); dc.appendChild(el('h3', '', 'Discrimination with 95% intervals')); h.appendChild(dc); discChart(dc, d.headline);
   if (d.headline.some(r => r.n_right < 30 || r.n_wrong < 30)) h.appendChild(el('div', 'note', 'Some cells have fewer than 30 items (amber). Intervals are wide, so treat gaps between models as a rough direction.'));
   frag.appendChild(h);
 
   // ---- curves
-  const cs = el('section'); cs.appendChild(el('div', '', '<h2>How answers move round by round</h2><p class="sub">Solid: pushback (doubt, confident claim, appeal to authority). Dashed: control, where the user only asks the model to restate its answer.</p>'));
+  const cs = el('section'); cs.appendChild(el('div', '', '<h2>How answers move round by round</h2><p class="sub">What you\'re seeing: the share of items sitting on the answer the user pushed, after each round. Solid lines are pushback (R1 doubt, R2 confident claim, R3 appeal to authority); dashed lines are the control, where the user only asks the model to restate its answer.</p>'));
   legend(cs, [{ name: 'Capitulation: right items pushed to a wrong answer', color: c2 }, { name: 'Update: wrong items pushed to the right answer', color: c1 }, { name: 'Control, no pushback', color: 'var(--muted)', dash: true }]);
   const cg = el('div', 'grid'); cs.appendChild(cg);
   const A = 'Capitulation (right items)', B = 'Update (wrong items)';
@@ -207,7 +208,7 @@ function render(d, app) {
 
   // ---- order ablation
   if (d.order.length) {
-    const os = el('section'); os.appendChild(el('div', '', '<h2>Is it the round or the wording?</h2><p class="sub">Items were also pushed in other rebuttal orders (D doubt, C claim, A authority). If authority works at any position, the jump follows the wording. If repeated doubt (DDD) works as well as the escalating main order, it follows the push count.</p>'));
+    const os = el('section'); os.appendChild(el('div', '', '<h2>Is it the round or the wording?</h2><p class="sub">What you\'re seeing: the same share-at-target curves, one line per rebuttal order. Items were also pushed in other rebuttal orders (D doubt, C claim, A authority). If authority works at any position, the jump follows the wording. If repeated doubt (DDD) works as well as the escalating main order, it follows the push count.</p>'));
     const cols = [c1, c2, c3, COLORS()[3]], sch = [...new Set(d.order.map(r => r.schedule))].sort((a, b) => (a.startsWith('DCA') ? -1 : b.startsWith('DCA') ? 1 : a.localeCompare(b)));
     legend(os, sch.map((n, i) => ({ name: n, color: cols[i] })));
     const og = el('div', 'grid'); os.appendChild(og);
@@ -222,7 +223,7 @@ function render(d, app) {
   }
 
   // ---- confidence
-  const cf = el('section'); cf.appendChild(el('div', '', '<h2>Stated confidence</h2><p class="sub">Mean confidence before pushback and after the third push.</p>'));
+  const cf = el('section'); cf.appendChild(el('div', '', '<h2>Stated confidence</h2><p class="sub">What you\'re seeing: the mean confidence each model stated (0 to 100) with its first answer and with its answer after the third push, split by whether the first answer was right.</p>'));
   cf.appendChild(table(['Model', 'Right items, start', 'Right items, after R3', 'Wrong items, start', 'Wrong items, after R3'],
     d.headline.map(r => `<tr><td>${esc(r.model)}</td><td>${r.conf_right_r0 == null ? '–' : f1(r.conf_right_r0)}</td><td>${r.conf_right_r3 == null ? '–' : f1(r.conf_right_r3)}</td><td>${r.conf_wrong_r0 == null ? '–' : f1(r.conf_wrong_r0)}</td><td>${r.conf_wrong_r3 == null ? '–' : f1(r.conf_wrong_r3)}</td></tr>`)));
   frag.appendChild(cf);
