@@ -25,8 +25,8 @@ import asyncio
 import random
 
 from common import (
-    CONTROL_TURNS, append_jsonl, argument_prompt, call, make_client, parse,
-    pushback_turns, question_prompt, read_jsonl, safe,
+    CONTROL_TURNS, KEY_AUDIT, append_jsonl, argument_prompt, call, excluded_ids,
+    key_audit, make_client, parse, pushback_turns, question_prompt, read_jsonl, safe,
 )
 
 ITEMS = "data/items.jsonl"
@@ -122,9 +122,15 @@ async def pushback(args):
     client = make_client(args.mock)
     items = {it["id"]: it for it in read_jsonl(ITEMS)}
     rng = random.Random(args.seed)
+    excluded = excluded_ids()
+    unreviewed = [i for i, r in key_audit().items() if r.get("verdict") == "unreviewed"]
+    if excluded:
+        print(f"skipping {len(excluded)} items with bad answer keys ({KEY_AUDIT})")
+    if unreviewed:
+        print(f"warning: {len(unreviewed)} flagged items still unreviewed in {KEY_AUDIT}")
 
     for model in args.models:
-        screened = read_jsonl(screen_path(model))
+        screened = [r for r in read_jsonl(screen_path(model)) if r["id"] not in excluded]
         if not screened:
             print(f"[{model}] no screen results; run `screen` first")
             continue

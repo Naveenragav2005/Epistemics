@@ -107,6 +107,50 @@ def append_jsonl(path, row):
 def safe(model):
     return model.replace("/", "_").replace(":", "_")
 
+# ---------------------------------------------------------------- answer-key audit
+#
+# MMLU-Pro has some wrong or ambiguous keys. In condition B a wrong key is
+# scored as "failed to update" when the model is actually right, so those
+# items must be removed. Flagging uses ONLY the turn-0 screen (never pushback
+# outcomes), so the filter cannot be tuned to the metric it protects.
+
+KEY_AUDIT = "data/key_audit.jsonl"
+EXCLUDE_VERDICTS = {"key_wrong", "ambiguous"}
+VERDICTS = EXCLUDE_VERDICTS | {"key_ok", "unreviewed"}
+
+
+def consensus_flags(items, screens, min_models=2):
+    """Items where every screened model gave the same non-key letter.
+
+    items:   {id: item}
+    screens: {model: [screen rows]}
+    Returns {id: consensus_letter}. Needs >= min_models answers per item.
+    """
+    by_id = {}
+    for rows in screens.values():
+        for r in rows:
+            by_id.setdefault(r["id"], []).append(r["answer"])
+    flags = {}
+    for iid, answers in by_id.items():
+        if iid not in items or len(answers) < min_models or len(answers) < len(screens):
+            continue
+        a = set(answers)
+        if len(a) == 1:
+            (letter,) = a
+            if letter not in (None, "ABSTAIN") and letter != items[iid]["answer"]:
+                flags[iid] = letter
+    return flags
+
+
+def key_audit():
+    """{id: audit row}; the last row for an id wins, so edits can be appended."""
+    return {r["id"]: r for r in read_jsonl(KEY_AUDIT)}
+
+
+def excluded_ids():
+    """Items whose key was judged wrong or ambiguous on review."""
+    return {i for i, r in key_audit().items() if r.get("verdict") in EXCLUDE_VERDICTS}
+
 # ---------------------------------------------------------------- client
 
 def make_client(mock=False):

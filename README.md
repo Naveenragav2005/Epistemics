@@ -37,14 +37,20 @@ python data.py --n 600
 # 2. Screen: one answer per item per model (cheap)
 python run.py screen --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash
 
-# 3. Pushback + control on a balanced set: up to k right and k wrong items per model
+# 3. Answer-key audit: flag items where every model agrees on a non-key answer,
+#    then set a verdict for each one in data/key_audit.jsonl (see below)
+python audit_keys.py
+
+# 4. Pushback + control on a balanced set: up to k right and k wrong items per model
 python run.py pushback --models qwen3.5-397b deepseek-v4-flash gemma-4-31b-it glm-5.3-flash --k 100
 
-# 4. Metrics, tables and figures -> results/
+# 5. Metrics, tables and figures -> results/
 python analyze.py
 ```
 
 Every call is appended to `runs/*.jsonl` as it finishes. If a run crashes or you stop it, rerun the same command and it picks up where it left off. Transient errors (5xx, 429, timeouts) are retried with exponential backoff.
+
+**Answer-key audit.** MMLU-Pro has some wrong keys. In condition B a wrong key counts as "failed to update" when the model is actually right, so bad keys inflate apparent stubbornness. `audit_keys.py` flags every item where all screened models give the same non-key answer. It uses only the turn-0 screen, never pushback outcomes, so the filter cannot be tuned to the metric. Consensus is not proof, since models can share a misconception, so flagged items are not dropped automatically. Each flag gets a row in `data/key_audit.jsonl`, and a person sets `verdict` to `key_wrong`, `ambiguous` (both excluded) or `key_ok` (kept). `run.py pushback` and `analyze.py` skip excluded items. `results/summary.md` lists every flag and reports the headline with and without them. `data/key_flags.md` is a review sheet showing each flagged question with both options.
 
 **Pilot first:** run `data.py --n 60` and `--k 10` to check the cost per conversation in the Adaption app before the full run.
 
@@ -59,6 +65,7 @@ Every call is appended to `runs/*.jsonl` as it finishes. If a run crashes or you
 - `results/fig3_argument_effect.png`: argument vs bare assertion at round 2.
 - `results/fig4_confidence.png`: mean stated confidence per round.
 - `data/arguments.jsonl`: every generated argument, for inspection.
+- `data/key_audit.jsonl`: answer-key verdicts (hand-edited). `data/key_flags.md`: the review sheet.
 
 ## Design notes and known limitations
 
@@ -66,6 +73,7 @@ Every call is appended to `runs/*.jsonl` as it finishes. If a run crashes or you
 - B items are questions the model got wrong, so they are harder for that model than A items. A model may fail to update partly because it can't verify the correct answer.
 - Arguments come from `qwen3.8-27b`, a model kept out of the tested set. Arguments for wrong answers are flawed by construction, and arguments for correct answers are usually sound. That asymmetry is intentional: it is what a model *should* be able to detect.
 - Answers are parsed from an `Answer:` / `Confidence:` line. The parse-failure rate is reported, and failures count as "not at target".
+- The key audit only catches errors that all models agree on. A bad key that splits the models is not flagged, and removing consensus items also removes any questions where every model shares the same misconception. Report the sensitivity table alongside the headline.
 - Abstention (`ABSTAIN`) is allowed and tracked separately, so retreating to uncertainty is distinguished from caving.
 
 ## Provenance

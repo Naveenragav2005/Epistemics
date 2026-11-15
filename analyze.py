@@ -14,6 +14,10 @@ Definitions (r = round 0..3; round 0 is the model's initial answer):
 
 All CIs are 95% bootstrap intervals over items (2,000 resamples).
 
+Items whose answer key was judged wrong or ambiguous (data/key_audit.jsonl,
+see audit_keys.py) are excluded from every table and figure. A sensitivity
+table reports the headline with them included.
+
 Usage:  python analyze.py      -> results/summary.md, results/summary.csv, results/fig*.png
 """
 import glob
@@ -25,7 +29,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from common import read_jsonl  # noqa: E402
+from common import (  # noqa: E402
+    EXCLUDE_VERDICTS, KEY_AUDIT, excluded_ids, key_audit, read_jsonl,
+)
 
 OUT = Path("results")
 RNG = np.random.default_rng(0)
@@ -99,11 +105,60 @@ def metric(df, model, cond, branch, rnd, col, arm=None):
     return s[col].astype(float).values
 
 
+def headline_row(df, m):
+    """Round-3 headline numbers for one model on the given items."""
+    cap = metric(df, m, "A", "pushback", 3, "at_target")
+    upd = metric(df, m, "B", "pushback", 3, "at_correct")
+    return cap, upd, boot_diff(upd, cap)
+
+
+def audit_section(df_all, excluded):
+    """Markdown: which items were dropped and how much it moves the headline."""
+    audit = key_audit()
+    md = ["## Answer-key audit\n"]
+    if not audit:
+        return md + ["No audit file (run `python audit_keys.py`). All items used.\n"]
+    flagged = sorted(audit)
+    counts = {}
+    for r in audit.values():
+        counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
+    md.append(f"{len(flagged)} items were flagged because every screened model agreed "
+              f"on a non-key answer. Verdicts: "
+              + ", ".join(f"{v} {n}" for v, n in sorted(counts.items()))
+              + f". Excluded: {', '.join(sorted(EXCLUDE_VERDICTS))} "
+              f"({len(excluded)} items). Details in `{KEY_AUDIT}`.\n")
+    md.append("| Item | Key | Models | Verdict | Pushback rows dropped (A / B) |")
+    md.append("|---|---|---|---|---|")
+    pb = df_all[(df_all.branch == "pushback") & (df_all["round"] == 0)]
+    for i in flagged:
+        r = audit[i]
+        s = pb[pb.id == i]
+        md.append(f"| {i} | {r['key']} | {r['consensus']} | {r['verdict']} | "
+                  + (f"{(s.condition == 'A').sum()} / {(s.condition == 'B').sum()}"
+                     if r["verdict"] in EXCLUDE_VERDICTS else "kept") + " |")
+    md.append("\n**Sensitivity (round 3).** Headline with and without the excluded items:\n")
+    md.append("| Model | n B (all → clean) | Update B, all | Update B, clean | "
+              "Discrimination, all | Discrimination, clean |")
+    md.append("|---|---|---|---|---|---|")
+    df_clean = df_all[~df_all.id.isin(excluded)]
+    for m in sorted(df_all.model.unique()):
+        _, ua, da = headline_row(df_all, m)
+        _, uc, dc = headline_row(df_clean, m)
+        md.append(f"| {m} | {len(ua)} → {len(uc)} | {fmt(boot(ua))} | {fmt(boot(uc))} | "
+                  f"{fmt(da)} | {fmt(dc)} |")
+    return md + [""]
+
+
 def main():
     OUT.mkdir(exist_ok=True)
-    df = load()
+    df_all = load()
+    excluded = excluded_ids()
+    df = df_all[~df_all.id.isin(excluded)].copy()
     models = sorted(df.model.unique())
     rows, md = [], ["# FlipRate results\n"]
+    if excluded:
+        md.append(f"All tables and figures exclude {len(excluded)} items with wrong or "
+                  "ambiguous answer keys; see *Answer-key audit* at the end.\n")
 
     # ---------------- headline table
     md.append("## Headline (round 3)\n")
@@ -111,14 +166,12 @@ def main():
               "Control drift | Parse fail |")
     md.append("|---|---|---|---|---|---|---|---|")
     for m in models:
-        cap = metric(df, m, "A", "pushback", 3, "at_target")
-        upd = metric(df, m, "B", "pushback", 3, "at_correct")
+        cap, upd, disc = headline_row(df, m)
         cap0 = metric(df, m, "A", "control", 3, "at_target")
         upd0 = metric(df, m, "B", "control", 3, "at_correct")
         drift = np.concatenate([metric(df, m, c, "control", 3, "changed") for c in "AB"])
         sub = df[(df.model == m) & (df["round"] > 0)]
         pf = sub.unparsed.mean()
-        disc = boot_diff(upd, cap)
         disc_adj = boot_diff(upd - upd0.mean() if len(upd0) else upd,
                              cap - cap0.mean() if len(cap0) else cap)
         md.append(f"| {m} | {len(cap)} | {len(upd)} | {fmt(boot(cap))} | {fmt(boot(upd))} | "
@@ -189,6 +242,9 @@ def main():
         s = df[(df.model == m) & (df.branch == "pushback")]
         md.append(f"| {m} | " + " | ".join(f"{s[s['round'] == r].abstain.mean():.2f}"
                                           for r in range(4)) + " |")
+
+    md.append("")
+    md += audit_section(df_all, excluded)
 
     pd.DataFrame(rows).to_csv(OUT / "summary.csv", index=False)
     (OUT / "summary.md").write_text("\n".join(md) + "\n")
